@@ -66,7 +66,7 @@
 
     let currentFile = null;
 
-    // Drag and Drop Logic
+    // Fixed Drag & Drop Logic
     ['dragenter', 'dragover'].forEach(name => {
         dropArea.addEventListener(name, (e) => {
             e.preventDefault();
@@ -75,14 +75,17 @@
     });
 
     ['dragleave', 'drop'].forEach(name => {
-        dropArea.preventDefault();
-        dropArea.classList.remove('drag-over');
-        if (name === 'drop') {
-            if (e.dataTransfer.files.length > 0) {
-                uploader.files = e.dataTransfer.files;
-                handleFileSelection(e.dataTransfer.files[0]);
+        dropArea.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('drag-over');
+            if (name === 'drop') {
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    uploader.files = files; 
+                    handleFileSelection(files[0]);
+                }
             }
-        }
+        });
     });
 
     uploader.addEventListener('change', () => {
@@ -113,8 +116,7 @@
             status.innerText = "PROCESSING MAGIC AMV...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // REMOVED -f avi TO PREVENT FORMAT ERROR
-            // FFmpeg will now auto-select the best container for the .amv extension
+            // RESTORED -f avi: This is the critical piece from your AppleScript
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -128,10 +130,12 @@
                 '-map_metadata', '-1',
                 '-fflags', '+bitexact',
                 '-flags:v', '+bitexact',
+                '-f', 'avi',
                 'output.amv'
             );
 
             const data = ffmpeg.FS('readFile', 'output.amv');
+            // Using octet-stream so the device treats it as raw data
             const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
             
             downloadLink.href = URL.createObjectURL(blob);
@@ -144,15 +148,8 @@
             convertBtn.style.display = 'none';
             dropArea.style.display = 'none';
         } catch (e) {
-            status.innerText = "FORMAT ERROR - RETRYING...";
+            status.innerText = "ERROR - PLEASE REFRESH";
             console.error(e);
-            // Fallback attempt with AVI force if AMV auto-fail
-            try {
-                await ffmpeg.run('-i', 'input', '-c:v', 'mjpeg', '-c:a', 'adpcm_ima_wav', 'output.amv');
-                // (Optional: logic to handle success here)
-            } catch (e2) {
-                status.innerText = "STILL FAILING - CHECK CONSOLE";
-            }
             convertBtn.disabled = false;
         }
     });
