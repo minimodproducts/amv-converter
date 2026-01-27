@@ -98,7 +98,7 @@
     <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">BUILD V6.0 - PC MATCH</div>
+<div class="version-tag">BUILD V7.0 - HYBRID ENGINE</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -117,8 +117,7 @@
 
     // --- SECURITY CHECK ---
     if (typeof SharedArrayBuffer === 'undefined') {
-        status.innerText = "SECURITY ERROR: REFRESHING...";
-        // Sometimes a simple reload triggers the Service Worker properly
+        status.innerText = "SECURITY UPDATE REQUIRED...";
         setTimeout(() => location.reload(), 2000);
     }
 
@@ -159,17 +158,15 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
-        // Output Filename (Matches PC script: name_minimod.avi)
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `${originalName}_minimod.avi`;
+        const outputName = `${originalName}_minimod.amv`;
 
         try {
             convertBtn.disabled = true;
             status.innerText = "LOADING ENGINE...";
             
-            // Check for security buffer again before loading
             if (typeof SharedArrayBuffer === 'undefined') {
-                 throw new Error("Browser Security Block. Please reload the page or try Chrome/Edge.");
+                 throw new Error("Browser Security Block. Please reload the page twice.");
             }
 
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
@@ -178,24 +175,38 @@
             status.innerText = "READING FILE...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
-            // 2. THE GOLDEN PC COMMAND
-            // ffmpeg -i input -vf "crop=ih*4/3:ih,hflip,scale=320:240" -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050
-            status.innerText = "PROCESSING (PC MATCH)...";
+            // 2. THE HYBRID COMMAND
+            // - Uses PC Filters: crop 4:3, flip, scale 320x240
+            // - Uses PC FPS: 21
+            // - Uses Web Codecs: MJPEG + ADPCM_IMA_WAV (Safe replacement for AMV)
+            // - Removes -block_size (Not supported on web)
+            status.innerText = "PROCESSING (HYBRID MODE)...";
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', // Exact filter from batch
-                '-c:v', 'amv',                // Native AMV Codec
-                '-c:a', 'adpcm_ima_amv',      // Native Audio
-                '-r', '21',                   // 21 FPS
-                '-ac', '1',                   // Mono
-                '-ar', '22050',               // 22050 Hz
-                '-block_size', '1050',        // Specific block size from batch
-                'output.amv'
+                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', 
+                '-c:v', 'mjpeg', '-q:v', '3',
+                '-vtag', 'MJPG',
+                '-c:a', 'adpcm_ima_wav',
+                '-r', '21',
+                '-ac', '1',
+                '-ar', '22050',
+                '-f', 'avi',
+                'output.avi'
             );
 
-            // 3. Download
-            const data = ffmpeg.FS('readFile', 'output.amv');
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' }); // AVI Mime Type
+            // 3. HEADER PATCH (AVI -> AMV)
+            // This tricks the device into accepting the AVI file as native AMV
+            status.innerText = "PATCHING HEADER...";
+            let data = ffmpeg.FS('readFile', 'output.avi');
+            
+            // Overwrite 'AVI ' with 'AMV ' at byte 8
+            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
+                 data[9] = 77; // Change V to M
+                 console.log("Header patched: AVI -> AMV");
+            }
+
+            // 4. Download
+            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
