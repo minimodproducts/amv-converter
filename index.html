@@ -19,47 +19,43 @@
             --border-radius: 12px;
         }
         
+        /* Force background to stay black but content to stay visible */
         html, body { 
             background-color: var(--bg-color) !important; 
             margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden;
         }
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             color: var(--text-color);
             display: flex; justify-content: center; align-items: center;
+            opacity: 1 !important; /* Force visibility */
         }
 
         .card { 
-            width: 95%;
+            width: 90%;
             max-width: 500px;
             padding: 50px 30px; 
             background: var(--card-bg);
             border: 2px dashed #333; 
             border-radius: 24px; 
             text-align: center;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
             position: relative;
-        }
-
-        /* Hover effect for drag and drop */
-        .card.drag-over {
-            border-color: #53c0c5;
-            background: #1a1a1a;
-            transform: scale(1.02);
+            z-index: 999; /* Stay on top */
+            visibility: visible !important;
         }
 
         .logo-img {
             width: 90%; max-width: 450px; height: auto;
             margin-bottom: 10px; display: inline-block;
-            pointer-events: none;
+            min-height: 50px; /* Space holder */
         }
 
         p { 
             color: var(--sub-text); font-size: 1em; margin-bottom: 40px; 
             letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
-            pointer-events: none;
         }
 
         #uploader {
@@ -68,7 +64,7 @@
             top: 0; left: 0;
             opacity: 0;
             cursor: pointer;
-            z-index: 5;
+            z-index: 10;
         }
 
         .drop-label {
@@ -86,13 +82,9 @@
             border: none; border-radius: var(--border-radius); 
             cursor: pointer; font-weight: 900; font-size: 1.4em; 
             text-transform: uppercase; letter-spacing: 1px;
-            transition: all 0.3s ease;
             position: relative;
             z-index: 20; 
         }
-
-        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
-        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
 
         #status { margin-top: 30px; font-size: 0.85em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; }
         
@@ -109,12 +101,12 @@
 
 <div class="card" id="dropZone">
     <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
+    
     <p>VIDEO CONVERSION TOOL</p>
     
     <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
 
     <input type="file" id="uploader" accept="video/*">
-    
     <button id="convertBtn">CONVERT VIDEO</button>
 
     <div id="status">System Ready</div>
@@ -123,32 +115,17 @@
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
+    // Logic remains same, focused on reliability
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
     
-    const dropZone = document.getElementById('dropZone');
     const uploader = document.getElementById('uploader');
     const fileInfo = document.getElementById('fileInfo');
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
     const downloadLink = document.getElementById('downloadLink');
 
-    // Drag and Drop Visual Logic
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            dropZone.classList.add('drag-over');
-        });
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('drag-over');
-        });
-    });
-
-    uploader.addEventListener('change', (e) => {
+    uploader.addEventListener('change', () => {
         if (uploader.files.length > 0) {
             fileInfo.innerText = `READY: ${uploader.files[0].name.toUpperCase()}`;
             fileInfo.style.color = "#eaba1f";
@@ -159,18 +136,14 @@
         status.innerText = `CONVERTING: ${Math.round(ratio * 100)}%`;
     });
 
-    convertBtn.addEventListener('click', async (e) => {
-        e.stopPropagation(); 
+    convertBtn.addEventListener('click', async () => {
         if (uploader.files.length === 0) return alert('Select a video');
-
         try {
             convertBtn.disabled = true;
             status.innerText = "LOADING ENGINE...";
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
-
-            const file = uploader.files[0];
             status.innerText = "PREPARING VIDEO...";
-            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(uploader.files[0]));
 
             await ffmpeg.run(
                 '-i', 'input.mp4',
@@ -184,13 +157,11 @@
             const data = ffmpeg.FS('readFile', 'OUTPUT.AVI');
             downloadLink.href = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-msvideo' }));
             downloadLink.download = 'MINIMOD_AMV.AVI';
-            
             status.innerText = "COMPLETE";
             downloadLink.style.display = 'block';
             convertBtn.style.display = 'none';
-            fileInfo.style.display = 'none';
         } catch (e) {
-            status.innerText = "ERROR - TRY REFRESHING";
+            status.innerText = "ERROR - PLEASE REFRESH";
             convertBtn.disabled = false;
         }
     });
