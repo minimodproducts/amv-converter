@@ -23,13 +23,11 @@
             background-color: var(--bg-color) !important; 
             margin: 0; padding: 0; width: 100%; height: 100%;
             overflow-x: hidden;
-        }
-
-        body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             color: var(--text-color);
-            display: flex; justify-content: center; align-items: center; flex-direction: column;
         }
+
+        body { display: flex; justify-content: center; align-items: center; flex-direction: column; }
 
         .card { 
             width: 90%; max-width: 500px; padding: 40px 30px; 
@@ -53,25 +51,29 @@
 
         #uploader { position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer; z-index: 15; }
 
-        #convertBtn, #inspectBtn { 
-            width: 100%; padding: 22px; border: none; border-radius: var(--border-radius); 
-            cursor: pointer; font-weight: 900; font-size: 1.4em; text-transform: uppercase; 
+        #convertBtn { 
+            width: 100%; padding: 22px; background: var(--gradient); color: #000; 
+            border: none; border-radius: var(--border-radius); cursor: pointer; 
+            font-weight: 900; font-size: 1.4em; text-transform: uppercase; 
             letter-spacing: 1px; transition: all 0.3s ease; margin-bottom: 10px;
         }
-        
-        #convertBtn { background: var(--gradient); color: #000; }
         #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
         #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
 
-        #inspectBtn { background: #222; color: #555; font-size: 0.8em; padding: 15px; display: none; }
-        #inspectBtn:hover { color: #fff; background: #333; }
-
-        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        #status { margin-top: 20px; font-size: 0.8em; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
         
         #downloadLink { 
             display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; 
             text-decoration: none; border-radius: var(--border-radius); font-weight: 900; 
             text-transform: uppercase; font-size: 1.2em; width: 100%; box-sizing: border-box;
+        }
+
+        /* Error Log Box (Hidden unless needed) */
+        #debugLog {
+            display: none; margin-top: 20px; width: 100%; height: 100px;
+            background: #000; border: 1px solid #333; color: #f00;
+            font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
+            box-sizing: border-box; overflow-y: scroll;
         }
 
         .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
@@ -89,13 +91,14 @@
     </div>
 
     <button id="convertBtn">CONVERT VIDEO</button>
-    <button id="inspectBtn">ANALYZE SAMPLE VIDEO</button>
     
     <div id="status">System Ready</div>
     <a id="downloadLink">Download File</a>
+    
+    <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">BUILD V3.0 - 16FPS ENGINE</div>
+<div class="version-tag">BUILD V4.0 - INPUT FIX</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -107,21 +110,23 @@
     const fileInfo = document.getElementById('fileInfo');
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
-    const inspectBtn = document.getElementById('inspectBtn');
     const downloadLink = document.getElementById('downloadLink');
+    const debugLog = document.getElementById('debugLog');
 
     let currentFile = null;
 
-    // --- DRAG & DROP & CLICK HANDLERS ---
+    // --- UI LOGIC ---
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => {
         dropArea.addEventListener(eName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
     });
     dropArea.addEventListener('dragover', () => dropArea.classList.add('drag-over'));
     dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
+    
     dropArea.addEventListener('drop', (e) => {
         dropArea.classList.remove('drag-over');
         if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
+    
     uploader.addEventListener('change', () => {
         if (uploader.files.length > 0) handleFile(uploader.files[0]);
     });
@@ -131,36 +136,24 @@
         fileInfo.innerText = file.name.toUpperCase();
         fileInfo.style.color = "#eaba1f";
         status.innerText = "FILE LOADED";
-        
-        // If user drops an AMV file, show the "Analyze" button
-        if (file.name.toLowerCase().endsWith('.amv')) {
-            inspectBtn.style.display = 'block';
-            status.innerText = "AMV DETECTED: CLICK 'ANALYZE' TO CHECK SETTINGS";
-        } else {
-            inspectBtn.style.display = 'none';
-        }
+        debugLog.style.display = 'none'; // Hide log on new file
     }
 
-    // --- INSPECTION LOGIC (Find out what the sample uses) ---
-    inspectBtn.addEventListener('click', async () => {
-        try {
-            status.innerText = "ANALYZING...";
-            if (!ffmpeg.isLoaded()) await ffmpeg.load();
-            ffmpeg.FS('writeFile', 'sample.amv', await fetchFile(currentFile));
-            // Run ffprobe to get info
-            await ffmpeg.run('-i', 'sample.amv'); 
-            // The output actually goes to the console logs, 
-            // but for now we just confirm it can be read.
-            alert("Check the Browser Console (Right Click > Inspect > Console) to see the file details!");
-        } catch (e) {
-            console.log(e);
-        }
+    // --- CONVERSION LOGIC ---
+    ffmpeg.setLogger(({ type, message }) => {
+        // Log ffmpeg output to the debug box
+        debugLog.value += `[${type}] ${message}\n`;
+        debugLog.scrollTop = debugLog.scrollHeight;
     });
 
-    // --- CONVERSION LOGIC ---
+    ffmpeg.setProgress(({ ratio }) => {
+        status.innerText = `CONVERTING: ${Math.round(ratio * 100)}%`;
+    });
+
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
+        // Output Filename
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
         const outputName = `CLEAN_${originalName}-minimod.amv`;
 
@@ -169,54 +162,48 @@
             status.innerText = "LOADING ENGINE...";
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            status.innerText = "PROCESSING (16 FPS)...";
-            ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
+            // Step 1: Write file to memory (AS MP4 to avoid format guessing errors)
+            status.innerText = "READING FILE...";
+            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
+            // Step 2: Run FFmpeg
+            // Based on your sample file header (RIFF AMV), we use -f amv
+            status.innerText = "PROCESSING (AMV)...";
+            
             await ffmpeg.run(
-                '-i', 'input',
-                // SCALING & PADDING (320x240)
-                '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
-                
-                // VIDEO CODEC (MJPEG for AMV)
-                '-c:v', 'mjpeg',
-                '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg', // Critical Bitstream Filter
-                
-                // FRAME RATE (Forced to 16 for old devices)
-                '-r', '16',
-
-                // AUDIO CODEC (IMA ADPCM)
-                '-c:a', 'adpcm_ima_wav',
-                '-ac', '1',      // Mono
-                '-ar', '22050',  // 22050Hz
-                
-                // METADATA STRIPPING
-                '-map_metadata', '-1',
-                '-fflags', '+bitexact',
-                '-flags:v', '+bitexact',
-                
-                // CONTAINER (AVI, but we will call it AMV)
-                '-f', 'avi',
-                'output.avi'
+                '-i', 'input.mp4',
+                '-r', '16',                  // Force 16 fps (Standard AMV)
+                '-s', '320x240',             // Size
+                '-ac', '1',                  // Mono Audio
+                '-ar', '22050',              // 22050 Hz
+                '-q:v', '3',                 // High Quality JPEG
+                '-c:v', 'mjpeg',             // Video Codec
+                '-c:a', 'adpcm_ima_amv',     // Audio Codec (AMV specific)
+                '-f', 'amv',                 // AMV Container
+                'output.amv'
             );
 
-            const data = ffmpeg.FS('readFile', 'output.avi');
+            // Step 3: Retrieve and Download
+            const data = ffmpeg.FS('readFile', 'output.amv');
             const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
             
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
             downloadLink.innerText = `DOWNLOAD ${outputName}`;
             
-            status.innerText = "COMPLETE";
+            status.innerText = "SUCCESS!";
             downloadLink.style.display = 'block';
             convertBtn.style.display = 'none';
             dropArea.style.display = 'none';
-            inspectBtn.style.display = 'none';
 
         } catch (e) {
-            status.innerText = "ERROR - SEE CONSOLE";
+            status.innerText = "ERROR! SEE DETAILS BELOW";
             console.error(e);
+            
+            // Show the debug log so you can copy/paste it if needed
+            debugLog.style.display = 'block';
+            debugLog.value += `\nCRITICAL ERROR: ${e.message}`;
+            
             convertBtn.disabled = false;
         }
     });
