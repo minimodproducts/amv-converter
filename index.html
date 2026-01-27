@@ -38,7 +38,6 @@
             cursor: pointer; transition: 0.2s;
         }
         .drop-zone:hover { border-color: #555; background: #222; }
-        .drop-zone.drag-over { border-color: #53c0c5; background: #222; }
         
         #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
         .drop-label { color: var(--accent); font-weight: 700; pointer-events: none; }
@@ -80,13 +79,14 @@
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly></textarea>
 </div>
-<div class="version-tag">LEGACY ENGINE V12.0 (STABLE)</div>
+<div class="version-tag">NUCLEAR ENGINE V13.0 (SINGLE THREAD)</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.5/dist/ffmpeg.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.9.5/ffmpeg.min.js"></script>
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // Explicitly using the older core path to prevent version mismatch
+    // Initialize the Ancient Engine
+    // This version runs on 1 Core, so it never asks for SharedArrayBuffer
     const ffmpeg = createFFmpeg({ 
         log: true,
         corePath: 'https://unpkg.com/@ffmpeg/core@0.8.5/dist/ffmpeg-core.js'
@@ -97,30 +97,16 @@
     const btn = document.getElementById('convertBtn');
     const link = document.getElementById('downloadLink');
     const debug = document.getElementById('debugLog');
-    const dropArea = document.getElementById('dropArea');
     
     let file = null;
 
-    // --- DRAG & DROP UI ---
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => {
-        dropArea.addEventListener(eName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
-    });
-    dropArea.addEventListener('dragover', () => dropArea.classList.add('drag-over'));
-    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
-    dropArea.addEventListener('drop', (e) => {
-        dropArea.classList.remove('drag-over');
-        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
-    });
-    
     uploader.addEventListener('change', () => {
-        if(uploader.files.length) handleFile(uploader.files[0]);
+        if(uploader.files.length){
+            file = uploader.files[0];
+            document.getElementById('fileInfo').innerText = file.name.toUpperCase();
+            status.innerText = "FILE LOADED";
+        }
     });
-
-    function handleFile(f) {
-        file = f;
-        document.getElementById('fileInfo').innerText = file.name.toUpperCase();
-        status.innerText = "FILE LOADED";
-    }
 
     ffmpeg.setLogger(({ message }) => {
         if(message.toLowerCase().includes("error")) {
@@ -134,43 +120,43 @@
         
         try {
             btn.disabled = true;
-            status.innerText = "LOADING ENGINE (Please Wait)...";
+            status.innerText = "STARTING LEGACY ENGINE...";
             
             if(!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            status.innerText = "READING FILE...";
+            status.innerText = "READING...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
             status.innerText = "CONVERTING...";
             
-            // --- THE HYBRID PARTNER COMMAND ---
-            // Visuals: hflip,scale=320:240 (From Partner's PC Code)
-            // FPS: 21 (From Partner's PC Code)
-            // Codec: mjpeg + mjpeg2jpeg (Web Safe replacement for 'amv')
-            // Audio: adpcm_ima_wav (Web Safe replacement for 'adpcm_ima_amv')
+            // --- THE HYBRID COMMAND ---
+            // 1. VISUALS: hflip + scale=320:240 (Matches Partner PC)
+            // 2. SPEED: 21 FPS (Matches Partner PC)
+            // 3. ENGINE: MJPEG + MJPEG2JPEG + ADPCM_IMA_WAV (Matches Mac, Web Safe)
             
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-vf', 'hflip,scale=320:240', 
-                '-c:v', 'mjpeg', 
-                '-q:v', '3', 
-                '-vtag', 'MJPG', 
+                '-vf', 'hflip,scale=320:240',
+                '-c:v', 'mjpeg',
+                '-q:v', '3',
+                '-vtag', 'MJPG',
                 '-bsf:v', 'mjpeg2jpeg',
-                '-c:a', 'adpcm_ima_wav', 
-                '-ac', '1', 
+                '-c:a', 'adpcm_ima_wav',
+                '-ac', '1',
                 '-ar', '22050',
                 '-r', '21',
-                '-f', 'avi', 
+                '-f', 'avi',
                 'output.avi'
             );
 
-            status.innerText = "FINALIZING...";
+            status.innerText = "PATCHING HEADER...";
             let data = ffmpeg.FS('readFile', 'output.avi');
             
-            // HEADER HACK: Turn "AVI" into "AMV"
-            // This modifies the binary file signature
+            // --- THE HEADER HACK ---
+            // Look for "AVI " at byte 8 and replace with "AMV "
+            // This hex-editing makes the device recognize the file
             if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
-                 data[9] = 77; // Change V to M
+                 data[9] = 77; // Swap 'V' for 'M'
                  console.log("Header patched: AVI -> AMV");
             }
 
@@ -187,7 +173,7 @@
         } catch(e) {
             status.innerText = "ERROR";
             debug.style.display = 'block';
-            debug.value += "\nERROR: " + e.message;
+            debug.value += "\nCRITICAL ERROR: " + e.message;
             btn.disabled = false;
         }
     });
