@@ -1,182 +1,107 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
-    <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
-    
-    <style>
-        :root {
-            --bg-color: #000000;
-            --card-bg: #111111;
-            --inner-bg: #1a1a1a;
-            --text-color: #ffffff;
-            --accent: #53c0c5;
-            --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
-        }
-        
-        body { 
-            background-color: var(--bg-color); color: var(--text-color);
-            font-family: system-ui, -apple-system, sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0;
-        }
+const { FFmpeg } = FFmpegWASM;
+const { fetchFile } = FFmpegUtil;
 
-        .card { 
-            width: 90%; max-width: 500px; padding: 40px; 
-            background: var(--card-bg); border-radius: 24px; text-align: center; 
-            border: 1px solid #222; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
+let ffmpeg = null;
+const statusEl = document.getElementById('status');
+const dropZone = document.getElementById('drop-zone');
 
-        .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; pointer-events: none; }
+const log = (msg) => {
+    statusEl.innerText += `\n> ${msg}`;
+    statusEl.scrollTop = statusEl.scrollHeight;
+}
 
-        .drop-zone {
-            background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px;
-            height: 160px; margin-bottom: 20px; position: relative; 
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.2s;
-        }
-        .drop-zone:hover { border-color: #555; background: #222; }
-        
-        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-        .drop-label { color: var(--accent); font-weight: 700; pointer-events: none; }
-
-        #convertBtn { 
-            width: 100%; padding: 20px; background: var(--gradient); border: none; 
-            border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer;
-        }
-        #convertBtn:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
-
-        #status { margin-top: 20px; font-weight: bold; color: var(--accent); min-height: 20px; }
-        
-        #downloadLink { 
-            display: none; margin-top: 20px; padding: 20px; background: #fff; color: #000; 
-            text-decoration: none; border-radius: 12px; font-weight: 900;
-        }
-        
-        #debugLog {
-            display: none; width: 100%; height: 100px; margin-top: 20px;
-            background: #000; border: 1px solid #333; color: #f55; 
-            font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
-        }
-        
-        .version-tag { margin-top: 15px; font-size: 10px; color: #444; }
-    </style>
-</head>
-<body>
-
-<div class="card">
-    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" class="logo-img">
-    
-    <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE</div>
-        <input type="file" id="uploader" accept="video/*">
-    </div>
-
-    <button id="convertBtn">CONVERT VIDEO</button>
-    <div id="status">READY</div>
-    <a id="downloadLink">DOWNLOAD</a>
-    <textarea id="debugLog" readonly></textarea>
-</div>
-<div class="version-tag">NUCLEAR ENGINE V13.0 (SINGLE THREAD)</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.9.5/ffmpeg.min.js"></script>
-<script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    
-    // Initialize the Ancient Engine
-    // This version runs on 1 Core, so it never asks for SharedArrayBuffer
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.8.5/dist/ffmpeg-core.js'
+// Initialize FFmpeg
+const loadFFmpeg = async () => {
+    ffmpeg = new FFmpeg();
+    ffmpeg.on('log', ({ message }) => {
+        // Only log crucial info to keep display clean
+        if(message.includes('frame=') || message.includes('size=')) log(message);
     });
     
-    const uploader = document.getElementById('uploader');
-    const status = document.getElementById('status');
-    const btn = document.getElementById('convertBtn');
-    const link = document.getElementById('downloadLink');
-    const debug = document.getElementById('debugLog');
+    try {
+        await ffmpeg.load({
+            coreURL: "https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js",
+        });
+        log("Ready! Drop a video file to convert.");
+    } catch (e) {
+        log("Error loading FFmpeg: " + e.message);
+    }
+};
+
+// Handle Drag and Drop
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
     
-    let file = null;
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+    
+    if (!ffmpeg) {
+        log("FFmpeg not loaded yet. Please wait.");
+        return;
+    }
 
-    uploader.addEventListener('change', () => {
-        if(uploader.files.length){
-            file = uploader.files[0];
-            document.getElementById('fileInfo').innerText = file.name.toUpperCase();
-            status.innerText = "FILE LOADED";
-        }
-    });
+    const file = files[0];
+    const inputName = 'input.mp4';
+    const outputName = 'output.avi';
 
-    ffmpeg.setLogger(({ message }) => {
-        if(message.toLowerCase().includes("error")) {
-            debug.style.display = 'block';
-            debug.value += message + "\n";
-        }
-    });
+    log(`Received ${file.name}. Starting conversion...`);
 
-    btn.addEventListener('click', async () => {
-        if(!file) return alert("Please select a file");
+    try {
+        // 1. Write file to WASM filesystem
+        await ffmpeg.writeFile(inputName, await fetchFile(file));
+
+        // 2. Run the Command (Mapped from your AppleScript)
+        // Command: -vf scale=320:240... -c:v mjpeg -q:v 3 -c:a adpcm_ima_wav -ac 1 -ar 22050 ...
+        await ffmpeg.exec([
+            '-i', inputName,
+            '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
+            '-c:v', 'mjpeg',
+            '-q:v', '3',
+            '-vtag', 'MJPG',
+            '-bsf:v', 'mjpeg2jpeg', // Essential bitstream filter for compatibility
+            '-c:a', 'adpcm_ima_wav',
+            '-ac', '1',
+            '-ar', '22050',
+            '-map_metadata', '-1',
+            '-fflags', '+bitexact',
+            '-flags:v', '+bitexact',
+            '-f', 'avi',
+            outputName
+        ]);
+
+        // 3. Read the result
+        log("Conversion complete! preparing download...");
+        const data = await ffmpeg.readFile(outputName);
+
+        // 4. Create download link
+        const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
+        const url = URL.createObjectURL(blob);
         
-        try {
-            btn.disabled = true;
-            status.innerText = "STARTING LEGACY ENGINE...";
-            
-            if(!ffmpeg.isLoaded()) await ffmpeg.load();
-            
-            status.innerText = "READING...";
-            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `CONVERTED_${file.name.split('.')[0]}.avi`;
+        a.innerText = `Download ${a.download}`;
+        a.style.display = 'block';
+        a.style.marginTop = '20px';
+        a.style.fontSize = '1.2em';
+        
+        statusEl.innerHTML = ''; // Clear logs for clean download button
+        statusEl.appendChild(a);
+        
+    } catch (err) {
+        log("Error during conversion: " + err.message);
+        console.error(err);
+    }
+});
 
-            status.innerText = "CONVERTING...";
-            
-            // --- THE HYBRID COMMAND ---
-            // 1. VISUALS: hflip + scale=320:240 (Matches Partner PC)
-            // 2. SPEED: 21 FPS (Matches Partner PC)
-            // 3. ENGINE: MJPEG + MJPEG2JPEG + ADPCM_IMA_WAV (Matches Mac, Web Safe)
-            
-            await ffmpeg.run(
-                '-i', 'input.mp4',
-                '-vf', 'hflip,scale=320:240',
-                '-c:v', 'mjpeg',
-                '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',
-                '-c:a', 'adpcm_ima_wav',
-                '-ac', '1',
-                '-ar', '22050',
-                '-r', '21',
-                '-f', 'avi',
-                'output.avi'
-            );
-
-            status.innerText = "PATCHING HEADER...";
-            let data = ffmpeg.FS('readFile', 'output.avi');
-            
-            // --- THE HEADER HACK ---
-            // Look for "AVI " at byte 8 and replace with "AMV "
-            // This hex-editing makes the device recognize the file
-            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
-                 data[9] = 77; // Swap 'V' for 'M'
-                 console.log("Header patched: AVI -> AMV");
-            }
-
-            const name = file.name.split('.')[0] + "_minimod.amv";
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
-            
-            link.href = URL.createObjectURL(blob);
-            link.download = name;
-            link.innerText = "DOWNLOAD " + name;
-            link.style.display = "block";
-            status.innerText = "DONE!";
-            btn.style.display = "none";
-
-        } catch(e) {
-            status.innerText = "ERROR";
-            debug.style.display = 'block';
-            debug.value += "\nCRITICAL ERROR: " + e.message;
-            btn.disabled = false;
-        }
-    });
-</script>
-</body>
-</html>
+loadFFmpeg();
