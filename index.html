@@ -31,7 +31,7 @@
         #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
         #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
         #downloadLink { display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; text-decoration: none; border-radius: var(--border-radius); font-weight: 900; text-transform: uppercase; font-size: 1.2em; width: 100%; box-sizing: border-box; }
-        #resetBtn { display: none; margin-top: 10px; color: var(--sub-text); cursor: pointer; font-size: 0.8em; text-decoration: underline; background: none; border: none; width: 100%; }
+        #resetBtn { display: none; margin-top: 15px; color: var(--sub-text); cursor: pointer; font-size: 0.8em; text-decoration: underline; background: none; border: none; width: 100%; }
     </style>
 </head>
 <body>
@@ -66,7 +66,7 @@
 
     let currentFile = null;
 
-    // Drag and Drop Logic
+    // Drag and Drop Visual Logic
     ['dragenter', 'dragover'].forEach(name => {
         dropArea.addEventListener(name, (e) => {
             e.preventDefault();
@@ -105,7 +105,8 @@
         if (!currentFile) return alert('Select a video');
         
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `CLEAN_${originalName}-minimod.AVI`;
+        // Corrected Extension to .AMV
+        const outputName = `CLEAN_${originalName}-minimod.amv`;
 
         try {
             convertBtn.disabled = true;
@@ -115,7 +116,7 @@
             status.innerText = "PROCESSING MAGIC AMV...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // EXPLICIT MAPPING FROM YOUR APPLESCRIPT
+            // MATCHING YOUR APPLESCRIPT COMMANDS EXACTLY
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -130,11 +131,11 @@
                 '-fflags', '+bitexact',
                 '-flags:v', '+bitexact',
                 '-f', 'avi',
-                'output.avi'
+                'output.amv'
             );
 
-            const data = ffmpeg.FS('readFile', 'output.avi');
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
+            const data = ffmpeg.FS('readFile', 'output.amv');
+            const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
             
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
