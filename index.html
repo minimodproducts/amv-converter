@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
+    
     <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
+
     <script src="coi-serviceworker.js"></script>
 
     <style>
@@ -17,30 +19,101 @@
             --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
             --border-radius: 12px;
         }
-        html, body { background-color: var(--bg-color) !important; margin: 0; padding: 0; width: 100%; height: 100%; overflow-x: hidden; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text-color); display: flex; justify-content: center; align-items: center; flex-direction: column; }
         
-        .card { width: 95%; max-width: 500px; padding: 40px 30px; background: var(--card-bg); border-radius: 24px; text-align: center; box-shadow: 0 30px 60px rgba(0,0,0,0.8); border: 1px solid #222; position: relative; z-index: 10; }
-        .logo-img { width: 90%; max-width: 450px; height: auto; margin-bottom: 5px; display: inline-block; }
-        .tool-title { color: var(--sub-text); font-size: 0.9em; margin-bottom: 30px; letter-spacing: 3px; text-transform: uppercase; font-weight: 300; }
-        
-        /* IMPROVED DROP ZONE */
-        .drop-zone { background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px; padding: 40px 20px; margin-bottom: 25px; position: relative; transition: all 0.3s ease; cursor: pointer; }
+        html, body { 
+            background-color: var(--bg-color) !important; 
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow-x: hidden;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            color: var(--text-color);
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+
+        .card { 
+            width: 90%;
+            max-width: 500px;
+            padding: 40px 30px; 
+            background: var(--card-bg);
+            border-radius: 24px; 
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            border: 1px solid #222;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo-img { 
+            width: 90%; max-width: 450px; height: auto; 
+            margin-bottom: 5px; display: inline-block; 
+            pointer-events: none; /* Prevents logo from blocking clicks */
+        }
+
+        .tool-title { 
+            color: var(--sub-text); font-size: 0.9em; margin-bottom: 30px; 
+            letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
+        }
+
+        /* --- NEW ROBUST DROP ZONE --- */
+        .drop-zone {
+            background: var(--inner-bg);
+            border: 2px dashed #333;
+            border-radius: 16px;
+            height: 150px; /* Fixed height for easier clicking */
+            margin-bottom: 25px;
+            position: relative; /* CRITICAL for absolute positioning of input */
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
         .drop-zone:hover { border-color: #444; background: #1e1e1e; }
         .drop-zone.drag-over { border-color: #53c0c5; background: #222; transform: scale(1.02); }
-        .drop-label { font-size: 0.85em; color: #53c0c5; font-weight: 700; letter-spacing: 1px; pointer-events: none; }
-        
-        /* The hidden input now covers the zone properly */
-        #uploader { position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer; z-index: 15; }
 
-        #convertBtn { width: 100%; padding: 22px; background: var(--gradient); color: #000; border: none; border-radius: var(--border-radius); cursor: pointer; font-weight: 900; font-size: 1.4em; text-transform: uppercase; letter-spacing: 1px; transition: all 0.3s ease; position: relative; z-index: 20; }
+        .drop-label { 
+            font-size: 0.85em; color: #53c0c5; font-weight: 700; 
+            letter-spacing: 1px; pointer-events: none; z-index: 5;
+            padding: 20px;
+        }
+
+        /* THE INVISIBLE CLICK CATCHER */
+        #uploader {
+            position: absolute;
+            width: 100%; height: 100%;
+            top: 0; left: 0;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10; /* Sits on top of everything in the box */
+            display: block;
+        }
+
+        #convertBtn { 
+            width: 100%; padding: 22px; 
+            background: var(--gradient); color: #000; 
+            border: none; border-radius: var(--border-radius); 
+            cursor: pointer; font-weight: 900; font-size: 1.4em; 
+            text-transform: uppercase; letter-spacing: 1px; 
+            transition: all 0.3s ease;
+        }
+
         #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
         #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
-        
+
         #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
-        #downloadLink { display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; text-decoration: none; border-radius: var(--border-radius); font-weight: 900; text-transform: uppercase; font-size: 1.2em; width: 100%; box-sizing: border-box; position: relative; z-index: 30; }
         
-        .version-tag { margin-top: 20px; color: #444; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
+        #downloadLink { 
+            display: none; margin-top: 15px; padding: 22px; 
+            background: #fff; color: #000; text-decoration: none; 
+            border-radius: var(--border-radius); font-weight: 900; 
+            text-transform: uppercase; font-size: 1.2em; 
+            width: 100%; box-sizing: border-box;
+        }
+
+        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -59,13 +132,15 @@
     <a id="downloadLink">Download File</a>
 </div>
 
-<div class="version-tag">STABLE BUILD V1.2.0</div>
+<div class="version-tag">BUILD V2.0 - AVI ENGINE</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
     
+    // UI Elements
     const dropArea = document.getElementById('dropArea');
     const uploader = document.getElementById('uploader');
     const fileInfo = document.getElementById('fileInfo');
@@ -75,52 +150,62 @@
 
     let currentFile = null;
 
-    // Reliability Fix: Ensure drag events are handled correctly
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    /* --- FIXED UI LOGIC --- */
+    
+    // 1. Handle File Selection (Click)
+    uploader.addEventListener('change', () => {
+        if (uploader.files.length > 0) {
+            handleFile(uploader.files[0]);
+        }
+    });
+
+    // 2. Handle Drag & Drop Visuals
+    ['dragenter', 'dragover'].forEach(eventName => {
         dropArea.addEventListener(eventName, (e) => {
             e.preventDefault();
             e.stopPropagation();
+            dropArea.classList.add('drag-over');
         }, false);
     });
 
-    dropArea.addEventListener('dragover', () => dropArea.classList.add('drag-over'));
-    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropArea.classList.remove('drag-over');
+        }, false);
+    });
 
+    // 3. Handle The Drop
     dropArea.addEventListener('drop', (e) => {
-        dropArea.classList.remove('drag-over');
         const dt = e.dataTransfer;
         const files = dt.files;
         if (files.length > 0) {
-            uploader.files = files; 
-            handleFileSelection(files[0]);
+            uploader.files = files; // Sync with hidden input
+            handleFile(files[0]);
         }
     });
 
-    uploader.addEventListener('change', function() {
-        if (this.files.length > 0) {
-            handleFileSelection(this.files[0]);
-        }
-    });
-
-    function handleFileSelection(file) {
+    function handleFile(file) {
         currentFile = file;
         fileInfo.innerText = file.name.toUpperCase();
         fileInfo.style.color = "#eaba1f";
-        status.innerText = "FILE READY";
+        status.innerText = "FILE LOADED - READY TO CONVERT";
     }
 
+    /* --- FIXED FFMPEG LOGIC --- */
+    
     ffmpeg.setProgress(({ ratio }) => {
         status.innerText = `CONVERTING: ${Math.round(ratio * 100)}%`;
     });
 
     convertBtn.addEventListener('click', async () => {
-        if (!currentFile) {
-            alert('Please select or drag a video file first.');
-            return;
-        }
+        if (!currentFile) return alert('Please select a video file first.');
         
+        // Setup Names
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `CLEAN_${originalName}-minimod.amv`;
+        const internalFile = "output.avi"; // WE USE AVI INTERNALLY TO PREVENT ERRORS
+        const finalFileName = `CLEAN_${originalName}-minimod.amv`; // WE RENAME ON DOWNLOAD
 
         try {
             convertBtn.disabled = true;
@@ -129,9 +214,12 @@
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
             status.innerText = "PROCESSING MAGIC AMV...";
+            
+            // Write file to memory
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // EXPLICIT MAPPING FROM YOUR ORIGINAL APPLESCRIPT
+            // RUN THE EXACT APPLESCRIPT COMMANDS
+            // Note: We output to 'output.avi' to make FFmpeg happy
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -145,24 +233,32 @@
                 '-map_metadata', '-1',
                 '-fflags', '+bitexact',
                 '-flags:v', '+bitexact',
-                '-f', 'avi',
-                'output.amv'
+                '-f', 'avi',  // We FORCE AVI format here
+                internalFile
             );
 
-            const data = ffmpeg.FS('readFile', 'output.amv');
+            // Read the file back
+            const data = ffmpeg.FS('readFile', internalFile);
+
+            // Create the Download Blob
+            // We use 'application/octet-stream' so the browser treats it as a raw file
             const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
             
-            downloadLink.href = URL.createObjectURL(blob);
-            downloadLink.download = outputName;
-            downloadLink.innerText = `DOWNLOAD ${outputName}`;
+            // Setup Download Link
+            const url = URL.createObjectURL(blob);
+            downloadLink.href = url;
+            downloadLink.download = finalFileName; // THIS RENAMES IT TO .AMV
+            downloadLink.innerText = `DOWNLOAD ${finalFileName}`;
             
-            status.innerText = "COMPLETE";
+            // Show Success State
+            status.innerText = "CONVERSION COMPLETE";
             downloadLink.style.display = 'block';
             convertBtn.style.display = 'none';
             dropArea.style.display = 'none';
+
         } catch (e) {
-            status.innerText = "ERROR - PLEASE REFRESH";
-            console.error("FFmpeg Error:", e);
+            console.error(e);
+            status.innerText = "ERROR: SEE CONSOLE (Try Refreshing)";
             convertBtn.disabled = false;
         }
     });
