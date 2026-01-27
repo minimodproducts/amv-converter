@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
+    
     <script src="coi-serviceworker.js"></script>
 
     <script src="util.js"></script>
@@ -75,23 +76,24 @@
     
     <div class="drop-zone" id="dropArea">
         <div id="fileInfo" class="drop-label">DRAG VIDEO HERE</div>
-        </div>
+    </div>
 
     <button id="convertBtn">CONVERT VIDEO</button>
     <div id="status">INITIALIZING ENGINE...</div>
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly></textarea>
 </div>
-<div class="version-tag">NUCLEAR ENGINE V14.0 (LOCAL WASM)</div>
+<div class="version-tag">NUCLEAR ENGINE V15.0 (HYBRID LOADING)</div>
 
 <script>
-    // 1. Setup FFmpeg using the global variables loaded from util.js and ffmpeg.js
+    // Access the libraries loaded from the script tags
     const { FFmpeg } = FFmpegWASM;
     const { fetchFile } = FFmpegUtil;
     
     let ffmpeg = null;
     let selectedFile = null;
 
+    // UI Elements
     const btn = document.getElementById('convertBtn');
     const status = document.getElementById('status');
     const link = document.getElementById('downloadLink');
@@ -99,13 +101,12 @@
     const dropArea = document.getElementById('dropArea');
     const fileInfo = document.getElementById('fileInfo');
 
-    // Logger helper
     const logError = (msg) => {
         debug.style.display = 'block';
         debug.value += `\n${msg}`;
     };
 
-    // 2. Initialize Engine (Loads local files)
+    // --- ENGINE INITIALIZATION (The Fix) ---
     const initEngine = async () => {
         try {
             ffmpeg = new FFmpeg();
@@ -114,20 +115,23 @@
                 console.log(message);
             });
 
-            // Point to the local files on GitHub
+            // HYBRID LOADING:
+            // 1. coreURL: Uses your LOCAL 'ffmpeg-core.js' (Bypasses Security)
+            // 2. wasmURL: Uses the CDN 'ffmpeg-core.wasm' (Bypasses 25MB Upload Limit)
             await ffmpeg.load({
-                coreURL: 'ffmpeg-core.js',
-                wasmURL: 'ffmpeg-core.wasm'
+                coreURL: 'ffmpeg-core.js', 
+                wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
             });
 
             status.innerText = "READY";
         } catch (e) {
             status.innerText = "ENGINE ERROR";
-            logError("Failed to load local FFmpeg: " + e.message);
+            logError("Failed to load FFmpeg: " + e.message);
+            console.error(e);
         }
     };
 
-    // 3. Drag and Drop Logic
+    // --- DRAG AND DROP LOGIC ---
     dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
     dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
     dropArea.addEventListener('drop', (e) => {
@@ -140,7 +144,7 @@
         }
     });
 
-    // Also support clicking to upload
+    // Support Click-to-Upload as well
     dropArea.addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -155,7 +159,7 @@
         input.click();
     });
 
-    // 4. Conversion Logic (Your specific settings)
+    // --- CONVERSION LOGIC ---
     btn.addEventListener('click', async () => {
         if (!selectedFile) return alert("Please drag a video first!");
         if (!ffmpeg || !ffmpeg.loaded) return alert("Engine not ready yet.");
@@ -164,15 +168,14 @@
             btn.disabled = true;
             status.innerText = "READING FILE...";
             
-            // Write file to memory
             await ffmpeg.writeFile('input.mp4', await fetchFile(selectedFile));
 
-            status.innerText = "CONVERTING (This may take a moment)...";
+            status.innerText = "CONVERTING...";
 
-            // --- THE HYBRID COMMAND (Ported to new Syntax) ---
+            // The Command (Matches your AppleScript exactly)
             await ffmpeg.exec([
                 '-i', 'input.mp4',
-                '-vf', 'hflip,scale=320:240', // Visuals
+                '-vf', 'hflip,scale=320:240',
                 '-c:v', 'mjpeg',
                 '-q:v', '3',
                 '-vtag', 'MJPG',
@@ -180,30 +183,20 @@
                 '-c:a', 'adpcm_ima_wav',
                 '-ac', '1',
                 '-ar', '22050',
-                '-r', '21', // Speed
+                '-r', '21',
                 '-f', 'avi',
                 'output.avi'
             ]);
 
             status.innerText = "PATCHING HEADER...";
             
-            // Read output
+            // Header Hack
             const data = await ffmpeg.readFile('output.avi');
-
-            // --- THE HEADER HACK ---
-            // Direct byte manipulation on the Uint8Array
-            if (data[8] === 65 && data[9] === 86 && data[10] === 73) { // ASCII for 'AVI'
-                 data[9] = 77; // Swap 'V' for 'M' -> 'AMI' (Wait, did you mean AMV?)
-                 // Your original code swapped 86(V) for 77(M), resulting in 'AMI' or 'AMV' depending on position.
-                 // Correcting to standard AMV header logic just to be safe: 
-                 // 'A'(65) 'M'(77) 'V'(86). 
-                 // If your previous code worked with 'A' 'M' 'I' (AVI -> AMI), I kept your logic exactly:
-                 // "data[9] = 77" changes "AVI" to "AMI".
-                 // NOTE: Real AMV files usually identify as "AMV " but standard AVI players read "AVI ".
-                 // I will stick to your exact logic: swapping the middle byte.
+            if (data[8] === 65 && data[9] === 86 && data[10] === 73) { 
+                 data[9] = 77; // Swap 'V' for 'M' -> 'AMI' (Based on your original logic)
             }
 
-            // Create Download
+            // Download Link
             const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             const name = selectedFile.name.split('.')[0] + "_minimod.amv";
             
@@ -217,12 +210,12 @@
 
         } catch (e) {
             status.innerText = "ERROR";
-            logError("Critical Error: " + e.message);
+            logError("Conversion Error: " + e.message);
             btn.disabled = false;
         }
     });
 
-    // Start
+    // Start Engine on Load
     initEngine();
 </script>
 </body>
