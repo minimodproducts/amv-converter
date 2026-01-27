@@ -1,6 +1,6 @@
-// We import directly from the URL now (ES Modules)
-import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
+// Access the libraries from the global window object (loaded via script tags)
+const { FFmpeg } = FFmpegWASM;
+const { fetchFile, toBlobURL } = FFmpegUtil;
 
 let ffmpeg = null;
 const statusEl = document.getElementById('status');
@@ -19,14 +19,12 @@ const loadFFmpeg = async () => {
     });
 
     try {
-        log("Downloading FFmpeg core...");
+        log("Loading local FFmpeg core...");
         
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-        
-        // Load the core files using Blob URLs to fix the origin error
+        // Point to the files we just uploaded to GitHub
         await ffmpeg.load({
-            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+            coreURL: 'ffmpeg-core.js',
+            wasmURL: 'ffmpeg-core.wasm'
         });
 
         log("Ready! Drop a video file to convert.");
@@ -53,7 +51,7 @@ dropZone.addEventListener('drop', async (e) => {
     if (files.length === 0) return;
     
     if (!ffmpeg || !ffmpeg.loaded) {
-        log("FFmpeg is not loaded yet. Please wait a moment.");
+        log("FFmpeg is not loaded yet. Please wait.");
         return;
     }
 
