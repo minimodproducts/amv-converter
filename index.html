@@ -5,11 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
     
-    <script src="coi-serviceworker.js"></script>
-
-    <script src="util.js"></script>
-    <script src="ffmpeg.js"></script>
-    
     <style>
         :root {
             --bg-color: #000000;
@@ -50,7 +45,7 @@
         #convertBtn { 
             width: 100%; padding: 20px; background: var(--gradient); border: none; 
             border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer;
-            opacity: 0.5; cursor: not-allowed; /* Disabled until loaded */
+            opacity: 0.5; cursor: not-allowed;
         }
         #convertBtn.ready { opacity: 1; cursor: pointer; }
 
@@ -84,12 +79,12 @@
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly>Log Output:</textarea>
 </div>
-<div class="version-tag">NUCLEAR ENGINE V16.0 (BLOB LOAD STRATEGY)</div>
+<div class="version-tag">NUCLEAR ENGINE V17.0 (SINGLE THREAD STABLE)</div>
+
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
 
 <script>
-    const { FFmpeg } = FFmpegWASM;
-    const { fetchFile, toBlobURL } = FFmpegUtil;
-    
+    const { createFFmpeg, fetchFile } = FFmpeg;
     let ffmpeg = null;
     let selectedFile = null;
 
@@ -105,42 +100,28 @@
         debug.scrollTop = debug.scrollHeight;
     };
 
-    // --- ENGINE INITIALIZATION (BLOB STRATEGY) ---
     const initEngine = async () => {
         try {
-            log("System Check: Starting...");
-            ffmpeg = new FFmpeg();
+            log("System Check: Starting v0.10.1...");
             
-            ffmpeg.on('log', ({ message }) => {
-                // Log progress events
-                if (message.includes('frame=')) status.innerText = "Processing...";
+            // Create the engine pointing to the Single Threaded core on CDN
+            ffmpeg = createFFmpeg({ 
+                log: true,
+                corePath: "https://unpkg.com/@ffmpeg/core@0.10.1/dist/ffmpeg-core.js"
+            });
+            
+            ffmpeg.setLogger(({ message }) => {
                 console.log(message);
+                if(message.includes("frame=")) status.innerText = "Processing...";
             });
 
-            log("Downloading Core Files from CDN...");
-            
-            // We use version 0.12.6 to ensure stability
-            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
-            
-            // 1. Download the JS file and create a local Blob URL
-            const coreBlob = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-            log("Core JS downloaded.");
-
-            // 2. Download the WASM file (25MB) and create a local Blob URL
-            const wasmBlob = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-            log("Core WASM downloaded.");
-
-            // 3. Load them into the engine
-            await ffmpeg.load({
-                coreURL: coreBlob,
-                wasmURL: wasmBlob
-            });
+            log("Downloading Core...");
+            await ffmpeg.load();
 
             log("Engine Loaded Successfully!");
             status.innerText = "READY - DROP VIDEO";
             fileInfo.innerText = "DRAG VIDEO HERE";
             
-            // Enable the button
             btn.disabled = false;
             btn.classList.add('ready');
             btn.innerText = "CONVERT VIDEO";
@@ -149,7 +130,6 @@
             status.innerText = "ENGINE FAILED";
             log("CRITICAL ERROR: " + e.message);
             console.error(e);
-            alert("Engine failed to load. Check the red log box for details.");
         }
     };
 
@@ -165,7 +145,8 @@
             status.innerText = "FILE LOADED";
         }
     });
-
+    
+    // Click to upload support
     dropArea.addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -180,14 +161,10 @@
         input.click();
     });
 
-    // --- CONVERT ---
+    // --- CONVERSION ---
     btn.addEventListener('click', async () => {
         if (!selectedFile) return alert("Please drag a video first!");
-        
-        // Double check engine status
-        if (!ffmpeg || !ffmpeg.loaded) {
-            return alert("Engine is not ready yet. Please look at the logs.");
-        }
+        if (!ffmpeg || !ffmpeg.isLoaded()) return alert("Engine not ready.");
 
         try {
             btn.disabled = true;
@@ -195,12 +172,13 @@
             status.innerText = "READING FILE...";
             log("Reading input file...");
             
-            await ffmpeg.writeFile('input.mp4', await fetchFile(selectedFile));
+            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(selectedFile));
 
             status.innerText = "CONVERTING...";
             log("Running FFmpeg conversion...");
 
-            await ffmpeg.exec([
+            // Exact commands from your working AppleScript
+            await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
                 '-c:v', 'mjpeg',
@@ -213,14 +191,14 @@
                 '-r', '21',
                 '-f', 'avi',
                 'output.avi'
-            ]);
+            );
 
             log("Conversion done. Patching header...");
             status.innerText = "PATCHING HEADER...";
             
-            const data = await ffmpeg.readFile('output.avi');
+            let data = ffmpeg.FS('readFile', 'output.avi');
             
-            // Header Hack: AVI -> AMI/AMV
+            // Header Hack: AVI -> AMI
             if (data[8] === 65 && data[9] === 86 && data[10] === 73) { 
                  data[9] = 77; 
                  log("Header patched: AVI -> AMI");
