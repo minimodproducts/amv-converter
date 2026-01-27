@@ -1,5 +1,6 @@
-const { FFmpeg } = FFmpegWASM;
-const { fetchFile, toBlobURL } = FFmpegUtil;
+// We import directly from the URL now (ES Modules)
+import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
+import { fetchFile, toBlobURL } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
 
 let ffmpeg = null;
 const statusEl = document.getElementById('status');
@@ -14,16 +15,15 @@ const loadFFmpeg = async () => {
     ffmpeg = new FFmpeg();
     
     ffmpeg.on('log', ({ message }) => {
-        // Log progress (frames/size) to keep the user updated
         if(message.includes('frame=') || message.includes('size=')) log(message);
     });
 
     try {
         log("Downloading FFmpeg core...");
         
-        // FIX: We load the worker files as Blobs to bypass the "Cross-Origin" error
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd';
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
         
+        // Load the core files using Blob URLs to fix the origin error
         await ffmpeg.load({
             coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
             wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -36,7 +36,6 @@ const loadFFmpeg = async () => {
     }
 };
 
-// Handle Drag and Drop
 dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('dragover');
@@ -65,11 +64,8 @@ dropZone.addEventListener('drop', async (e) => {
     log(`Received ${file.name}. Starting conversion...`);
 
     try {
-        // 1. Write the file to the browser's memory
         await ffmpeg.writeFile(inputName, await fetchFile(file));
 
-        // 2. Run the specific conversion command for your old player
-        // Note: Using the exact settings from your AppleScript
         await ffmpeg.exec([
             '-i', inputName,
             '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -87,11 +83,9 @@ dropZone.addEventListener('drop', async (e) => {
             outputName
         ]);
 
-        // 3. Read the result
         log("Conversion complete! Preparing download...");
         const data = await ffmpeg.readFile(outputName);
 
-        // 4. Create the download link
         const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
         const url = URL.createObjectURL(blob);
         
@@ -104,7 +98,7 @@ dropZone.addEventListener('drop', async (e) => {
         a.style.fontSize = '1.2em';
         a.style.color = '#0f0';
         
-        statusEl.innerHTML = ''; // Clear logs
+        statusEl.innerHTML = ''; 
         statusEl.appendChild(a);
         
     } catch (err) {
