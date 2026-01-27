@@ -13,49 +13,69 @@
         :root {
             --bg-color: #000000;
             --card-bg: #111111;
+            --inner-bg: #1a1a1a;
             --text-color: #ffffff;
             --sub-text: #888888;
             --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
             --border-radius: 12px;
         }
         
-        /* Force background to stay black but content to stay visible */
         html, body { 
             background-color: var(--bg-color) !important; 
             margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow: hidden;
         }
 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             color: var(--text-color);
             display: flex; justify-content: center; align-items: center;
-            opacity: 1 !important; /* Force visibility */
         }
 
         .card { 
-            width: 90%;
+            width: 95%;
             max-width: 500px;
-            padding: 50px 30px; 
+            padding: 40px 30px; 
             background: var(--card-bg);
-            border: 2px dashed #333; 
             border-radius: 24px; 
             text-align: center;
             box-shadow: 0 30px 60px rgba(0,0,0,0.8);
-            position: relative;
-            z-index: 999; /* Stay on top */
-            visibility: visible !important;
+            border: 1px solid #222;
         }
 
         .logo-img {
             width: 90%; max-width: 450px; height: auto;
-            margin-bottom: 10px; display: inline-block;
-            min-height: 50px; /* Space holder */
+            margin-bottom: 5px; display: inline-block;
         }
 
-        p { 
-            color: var(--sub-text); font-size: 1em; margin-bottom: 40px; 
+        .tool-title { 
+            color: var(--sub-text); font-size: 0.9em; margin-bottom: 30px; 
             letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
+        }
+
+        /* NEW SEPARATE DROP ZONE */
+        .drop-zone {
+            background: var(--inner-bg);
+            border: 2px dashed #333;
+            border-radius: 16px;
+            padding: 40px 20px;
+            margin-bottom: 25px;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .drop-zone.drag-over {
+            border-color: #53c0c5;
+            background: #222;
+            transform: scale(1.02);
+        }
+
+        .drop-label {
+            font-size: 0.85em;
+            color: #53c0c5;
+            font-weight: 700;
+            letter-spacing: 1px;
+            pointer-events: none;
         }
 
         #uploader {
@@ -64,16 +84,6 @@
             top: 0; left: 0;
             opacity: 0;
             cursor: pointer;
-            z-index: 10;
-        }
-
-        .drop-label {
-            display: block;
-            margin-bottom: 20px;
-            font-size: 0.9em;
-            color: #53c0c5;
-            font-weight: 700;
-            letter-spacing: 1px;
         }
 
         #convertBtn { 
@@ -82,31 +92,34 @@
             border: none; border-radius: var(--border-radius); 
             cursor: pointer; font-weight: 900; font-size: 1.4em; 
             text-transform: uppercase; letter-spacing: 1px;
-            position: relative;
-            z-index: 20; 
+            transition: all 0.3s ease;
         }
 
-        #status { margin-top: 30px; font-size: 0.85em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; }
+        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
+        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+
+        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
         
         #downloadLink { 
-            display: none; margin-top: 20px; padding: 22px; 
+            display: none; margin-top: 15px; padding: 22px; 
             background: #fff; color: #000; text-decoration: none; 
             border-radius: var(--border-radius); font-weight: 900;
             text-transform: uppercase; font-size: 1.2em; width: 100%;
-            box-sizing: border-box; position: relative; z-index: 30;
+            box-sizing: border-box;
         }
     </style>
 </head>
 <body>
 
-<div class="card" id="dropZone">
+<div class="card">
     <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
+    <div class="tool-title">VIDEO CONVERSION TOOL</div>
     
-    <p>VIDEO CONVERSION TOOL</p>
-    
-    <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
+    <div class="drop-zone" id="dropArea">
+        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
+        <input type="file" id="uploader" accept="video/*">
+    </div>
 
-    <input type="file" id="uploader" accept="video/*">
     <button id="convertBtn">CONVERT VIDEO</button>
 
     <div id="status">System Ready</div>
@@ -115,19 +128,34 @@
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
-    // Logic remains same, focused on reliability
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
     
+    const dropArea = document.getElementById('dropArea');
     const uploader = document.getElementById('uploader');
     const fileInfo = document.getElementById('fileInfo');
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
     const downloadLink = document.getElementById('downloadLink');
 
+    // Visual feedback for the separate drop zone
+    ['dragenter', 'dragover'].forEach(name => {
+        dropArea.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropArea.classList.add('drag-over');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(name => {
+        dropArea.addEventListener(name, (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('drag-over');
+        });
+    });
+
     uploader.addEventListener('change', () => {
         if (uploader.files.length > 0) {
-            fileInfo.innerText = `READY: ${uploader.files[0].name.toUpperCase()}`;
+            fileInfo.innerText = uploader.files[0].name.toUpperCase();
             fileInfo.style.color = "#eaba1f";
         }
     });
@@ -142,7 +170,7 @@
             convertBtn.disabled = true;
             status.innerText = "LOADING ENGINE...";
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
-            status.innerText = "PREPARING VIDEO...";
+            status.innerText = "PROCESSING...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(uploader.files[0]));
 
             await ffmpeg.run(
@@ -160,6 +188,7 @@
             status.innerText = "COMPLETE";
             downloadLink.style.display = 'block';
             convertBtn.style.display = 'none';
+            dropArea.style.display = 'none';
         } catch (e) {
             status.innerText = "ERROR - PLEASE REFRESH";
             convertBtn.disabled = false;
