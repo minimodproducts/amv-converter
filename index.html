@@ -14,213 +14,153 @@
             --card-bg: #111111;
             --inner-bg: #1a1a1a;
             --text-color: #ffffff;
-            --sub-text: #888888;
             --accent: #53c0c5;
             --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
-            --border-radius: 12px;
         }
         
-        html, body { 
-            background-color: var(--bg-color) !important; 
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow-x: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            color: var(--text-color);
+        body { 
+            background-color: var(--bg-color); color: var(--text-color);
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0;
         }
-
-        body { display: flex; justify-content: center; align-items: center; flex-direction: column; }
 
         .card { 
-            width: 90%; max-width: 500px; padding: 40px 30px; 
+            width: 90%; max-width: 500px; padding: 40px; 
             background: var(--card-bg); border-radius: 24px; text-align: center; 
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8); border: 1px solid #222; 
-            position: relative; z-index: 10;
+            border: 1px solid #222;
         }
 
-        .logo-img { width: 90%; max-width: 450px; height: auto; margin-bottom: 5px; pointer-events: none; }
-        .tool-title { color: var(--sub-text); font-size: 0.9em; margin-bottom: 30px; letter-spacing: 3px; text-transform: uppercase; font-weight: 300; }
+        .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; }
 
         .drop-zone {
             background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px;
-            height: 150px; margin-bottom: 25px; position: relative; transition: all 0.3s ease;
-            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            height: 160px; margin-bottom: 20px; position: relative; 
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.2s;
         }
-        .drop-zone:hover { border-color: #444; background: #1e1e1e; }
-        .drop-zone.drag-over { border-color: #53c0c5; background: #222; transform: scale(1.02); }
-
-        .drop-label { font-size: 0.85em; color: var(--accent); font-weight: 700; letter-spacing: 1px; pointer-events: none; padding: 20px; }
-
-        #uploader { position: absolute; width: 100%; height: 100%; top: 0; left: 0; opacity: 0; cursor: pointer; z-index: 15; }
+        .drop-zone:hover { border-color: #555; background: #222; }
+        
+        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        .drop-label { color: var(--accent); font-weight: 700; pointer-events: none; }
 
         #convertBtn { 
-            width: 100%; padding: 22px; background: var(--gradient); color: #000; 
-            border: none; border-radius: var(--border-radius); cursor: pointer; 
-            font-weight: 900; font-size: 1.4em; text-transform: uppercase; 
-            letter-spacing: 1px; transition: all 0.3s ease; margin-bottom: 10px;
+            width: 100%; padding: 20px; background: var(--gradient); border: none; 
+            border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer;
         }
-        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
-        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+        #convertBtn:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
 
-        #status { margin-top: 20px; font-size: 0.8em; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        #status { margin-top: 20px; font-weight: bold; color: var(--accent); min-height: 20px; }
         
         #downloadLink { 
-            display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; 
-            text-decoration: none; border-radius: var(--border-radius); font-weight: 900; 
-            text-transform: uppercase; font-size: 1.2em; width: 100%; box-sizing: border-box;
+            display: none; margin-top: 20px; padding: 20px; background: #fff; color: #000; 
+            text-decoration: none; border-radius: 12px; font-weight: 900;
         }
-
+        
         #debugLog {
-            display: none; margin-top: 20px; width: 100%; height: 100px;
-            background: #000; border: 1px solid #333; color: #f00;
+            display: none; width: 100%; height: 100px; margin-top: 20px;
+            background: #000; border: 1px solid #333; color: #f55; 
             font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
-            box-sizing: border-box; overflow-y: scroll;
         }
-
-        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
-    <div class="tool-title">VIDEO CONVERSION TOOL</div>
+    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" class="logo-img">
     
     <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
+        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE</div>
         <input type="file" id="uploader" accept="video/*">
     </div>
 
     <button id="convertBtn">CONVERT VIDEO</button>
-    
-    <div id="status">System Ready</div>
-    <a id="downloadLink">Download File</a>
-    
+    <div id="status">READY</div>
+    <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly></textarea>
 </div>
-
-<div class="version-tag">HYBRID ENGINE V9.0</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
     
-    const dropArea = document.getElementById('dropArea');
     const uploader = document.getElementById('uploader');
-    const fileInfo = document.getElementById('fileInfo');
     const status = document.getElementById('status');
-    const convertBtn = document.getElementById('convertBtn');
-    const downloadLink = document.getElementById('downloadLink');
-    const debugLog = document.getElementById('debugLog');
-
-    let currentFile = null;
-
-    // --- SECURITY CHECK ---
-    if (typeof SharedArrayBuffer === 'undefined') {
-        status.innerText = "SECURITY ERROR: REFRESH PAGE TWICE";
-        setTimeout(() => location.reload(), 3000);
-    }
-
-    // --- UI HANDLERS ---
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => {
-        dropArea.addEventListener(eName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
-    });
-    dropArea.addEventListener('dragover', () => dropArea.classList.add('drag-over'));
-    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
+    const btn = document.getElementById('convertBtn');
+    const link = document.getElementById('downloadLink');
+    const debug = document.getElementById('debugLog');
     
-    dropArea.addEventListener('drop', (e) => {
-        dropArea.classList.remove('drag-over');
-        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
-    });
-    
+    let file = null;
+
     uploader.addEventListener('change', () => {
-        if (uploader.files.length > 0) handleFile(uploader.files[0]);
+        if(uploader.files.length){
+            file = uploader.files[0];
+            document.getElementById('fileInfo').innerText = file.name;
+        }
     });
 
-    function handleFile(file) {
-        currentFile = file;
-        fileInfo.innerText = file.name.toUpperCase();
-        fileInfo.style.color = "#eaba1f";
-        status.innerText = "FILE LOADED";
-        debugLog.style.display = 'none';
-    }
-
-    // --- LOGGER ---
-    ffmpeg.setLogger(({ type, message }) => {
-        debugLog.value += `[${type}] ${message}\n`;
-        debugLog.scrollTop = debugLog.scrollHeight;
+    ffmpeg.setLogger(({ message }) => {
+        // Only show debug log if it contains "Error"
+        if(message.toLowerCase().includes("error")) {
+            debug.style.display = 'block';
+            debug.value += message + "\n";
+        }
     });
 
-    ffmpeg.setProgress(({ ratio }) => {
-        status.innerText = `CONVERTING: ${Math.round(ratio * 100)}%`;
-    });
-
-    // --- MAIN LOGIC ---
-    convertBtn.addEventListener('click', async () => {
-        if (!currentFile) return alert('Select a video first.');
+    btn.addEventListener('click', async () => {
+        if(!file) return alert("Please select a file");
         
-        const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `${originalName}_minimod.amv`;
-
         try {
-            convertBtn.disabled = true;
-            status.innerText = "STARTING ENGINE...";
+            btn.disabled = true;
+            status.innerText = "LOADING...";
             
-            if (typeof SharedArrayBuffer === 'undefined') {
-                 throw new Error("Security Error. You must ensure 'coi-serviceworker.js' is in your repo and then refresh the page twice.");
-            }
-
-            if (!ffmpeg.isLoaded()) await ffmpeg.load();
+            if(!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            // 1. Write Input
-            status.innerText = "READING FILE...";
-            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
+            status.innerText = "READING...";
+            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // 2. RUN FFMPEG (PC VISUALS + MAC ENGINE)
-            // -vf "hflip,scale=320:240" (From PC Script)
-            // -c:v mjpeg (From Mac Script, replaces incompatible 'amv' codec)
-            // -r 21 (From PC Script)
-            status.innerText = "PROCESSING...";
+            status.innerText = "CONVERTING...";
+            
+            // --- THE GOLDEN COMMAND ---
+            // 1. VISUALS: Taken from PC Script (crop 4:3, flip, scale 320x240)
+            // 2. CODEC: Taken from Mac Script (mjpeg, mjpeg2jpeg filter)
+            // 3. AUDIO: Taken from Mac Script (adpcm_ima_wav 22050hz mono)
+            // 4. SPEED: Taken from PC Script (21 fps)
             
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-vf', 'hflip,scale=320:240', // PC Visuals
-                '-c:v', 'mjpeg', '-q:v', '3', // Web-safe Video
-                '-c:a', 'adpcm_ima_wav',      // Web-safe Audio
-                '-ac', '1',                   // Mono
-                '-ar', '22050',               // 22050 Hz
-                '-r', '21',                   // PC Speed
-                '-f', 'avi',                  // Container
+                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', 
+                '-c:v', 'mjpeg', 
+                '-q:v', '3', 
+                '-vtag', 'MJPG', 
+                '-bsf:v', 'mjpeg2jpeg',
+                '-c:a', 'adpcm_ima_wav', 
+                '-ac', '1', 
+                '-ar', '22050',
+                '-r', '21',
+                '-f', 'avi', 
                 'output.avi'
             );
 
-            // 3. HEADER HACK (AVI -> AMV)
-            status.innerText = "FINALIZING...";
-            let data = ffmpeg.FS('readFile', 'output.avi');
+            const data = ffmpeg.FS('readFile', 'output.avi');
             
-            // Change the file signature bytes from AVI to AMV
-            // This tricks the device into reading the file
-            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
-                 data[9] = 77; // V -> M
-                 console.log("Header patched: AVI -> AMV");
-            }
-
-            // 4. DOWNLOAD
-            const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
-            downloadLink.href = URL.createObjectURL(blob);
-            downloadLink.download = outputName;
-            downloadLink.innerText = `DOWNLOAD ${outputName}`;
+            // Generate filename with .amv extension (Standard AVI structure inside)
+            const name = file.name.split('.')[0] + "_minimod.amv";
+            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             
-            status.innerText = "SUCCESS!";
-            downloadLink.style.display = 'block';
-            convertBtn.style.display = 'none';
-            dropArea.style.display = 'none';
+            link.href = URL.createObjectURL(blob);
+            link.download = name;
+            link.innerText = "DOWNLOAD " + name;
+            link.style.display = "block";
+            status.innerText = "DONE!";
+            btn.style.display = "none";
 
-        } catch (e) {
-            status.innerText = "ERROR! SEE LOG BELOW";
-            debugLog.style.display = 'block';
-            debugLog.value += `\nCRITICAL ERROR: ${e.message}`;
-            convertBtn.disabled = false;
+        } catch(e) {
+            status.innerText = "ERROR";
+            debug.style.display = 'block';
+            debug.value += "\nCRITICAL JS ERROR: " + e.message;
+            btn.disabled = false;
         }
     });
 </script>
