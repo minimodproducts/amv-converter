@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
     <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
+    
     <script src="coi-serviceworker.js"></script>
 
     <style>
@@ -97,7 +98,7 @@
     <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">BUILD V5.0 - HEADER PATCHER</div>
+<div class="version-tag">BUILD V6.0 - PC MATCH</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -113,6 +114,13 @@
     const debugLog = document.getElementById('debugLog');
 
     let currentFile = null;
+
+    // --- SECURITY CHECK ---
+    if (typeof SharedArrayBuffer === 'undefined') {
+        status.innerText = "SECURITY ERROR: REFRESHING...";
+        // Sometimes a simple reload triggers the Service Worker properly
+        setTimeout(() => location.reload(), 2000);
+    }
 
     // --- UI LOGIC ---
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eName => {
@@ -151,48 +159,44 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
+        // Output Filename (Matches PC script: name_minimod.avi)
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `CLEAN_${originalName}-minimod.amv`;
+        const outputName = `${originalName}_minimod.avi`;
 
         try {
             convertBtn.disabled = true;
             status.innerText = "LOADING ENGINE...";
+            
+            // Check for security buffer again before loading
+            if (typeof SharedArrayBuffer === 'undefined') {
+                 throw new Error("Browser Security Block. Please reload the page or try Chrome/Edge.");
+            }
+
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
             // 1. Write Input
             status.innerText = "READING FILE...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
-            // 2. Process as AVI (Using standard supported codecs)
-            status.innerText = "PROCESSING...";
+            // 2. THE GOLDEN PC COMMAND
+            // ffmpeg -i input -vf "crop=ih*4/3:ih,hflip,scale=320:240" -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050
+            status.innerText = "PROCESSING (PC MATCH)...";
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-r', '16',                  // Force 16 fps
-                '-s', '320x240',             // Size
-                '-ac', '1',                  // Mono
-                '-ar', '22050',              // 22050 Hz
-                '-q:v', '3',                 // High Quality
-                '-c:v', 'mjpeg',             // Video Codec
-                '-c:a', 'adpcm_ima_wav',     // Standard AVI Audio Codec
-                '-vtag', 'MJPG',             // Force MJPG tag
-                '-f', 'avi',                 // FORCE AVI CONTAINER
-                'output.avi'
+                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', // Exact filter from batch
+                '-c:v', 'amv',                // Native AMV Codec
+                '-c:a', 'adpcm_ima_amv',      // Native Audio
+                '-r', '21',                   // 21 FPS
+                '-ac', '1',                   // Mono
+                '-ar', '22050',               // 22050 Hz
+                '-block_size', '1050',        // Specific block size from batch
+                'output.amv'
             );
 
-            // 3. The "Header Hack"
-            // We read the AVI file and change the internal signature from "AVI " to "AMV "
-            status.innerText = "PATCHING HEADER...";
-            let data = ffmpeg.FS('readFile', 'output.avi');
+            // 3. Download
+            const data = ffmpeg.FS('readFile', 'output.amv');
+            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' }); // AVI Mime Type
             
-            // Look at bytes 8, 9, 10 (ASCII for 'AVI') and change 'V'(86) to 'M'(77)
-            // RIFF....AVI LIST -> RIFF....AMV LIST
-            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
-                 data[9] = 77; // Change V to M
-                 console.log("Header patched successfully: AVI -> AMV");
-            }
-
-            // 4. Download
-            const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
             downloadLink.innerText = `DOWNLOAD ${outputName}`;
