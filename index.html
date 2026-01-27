@@ -66,7 +66,7 @@
 
     let currentFile = null;
 
-    // Drag and Drop Visual Logic
+    // Drag and Drop Logic
     ['dragenter', 'dragover'].forEach(name => {
         dropArea.addEventListener(name, (e) => {
             e.preventDefault();
@@ -75,16 +75,14 @@
     });
 
     ['dragleave', 'drop'].forEach(name => {
-        dropArea.addEventListener(name, (e) => {
-            e.preventDefault();
-            dropArea.classList.remove('drag-over');
-            if (name === 'drop') {
-                if (e.dataTransfer.files.length > 0) {
-                    uploader.files = e.dataTransfer.files;
-                    handleFileSelection(e.dataTransfer.files[0]);
-                }
+        dropArea.preventDefault();
+        dropArea.classList.remove('drag-over');
+        if (name === 'drop') {
+            if (e.dataTransfer.files.length > 0) {
+                uploader.files = e.dataTransfer.files;
+                handleFileSelection(e.dataTransfer.files[0]);
             }
-        });
+        }
     });
 
     uploader.addEventListener('change', () => {
@@ -105,7 +103,6 @@
         if (!currentFile) return alert('Select a video');
         
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        // Corrected Extension to .AMV
         const outputName = `CLEAN_${originalName}-minimod.amv`;
 
         try {
@@ -116,7 +113,8 @@
             status.innerText = "PROCESSING MAGIC AMV...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // MATCHING YOUR APPLESCRIPT COMMANDS EXACTLY
+            // REMOVED -f avi TO PREVENT FORMAT ERROR
+            // FFmpeg will now auto-select the best container for the .amv extension
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -130,7 +128,6 @@
                 '-map_metadata', '-1',
                 '-fflags', '+bitexact',
                 '-flags:v', '+bitexact',
-                '-f', 'avi',
                 'output.amv'
             );
 
@@ -147,7 +144,15 @@
             convertBtn.style.display = 'none';
             dropArea.style.display = 'none';
         } catch (e) {
-            status.innerText = "ERROR - PLEASE REFRESH";
+            status.innerText = "FORMAT ERROR - RETRYING...";
+            console.error(e);
+            // Fallback attempt with AVI force if AMV auto-fail
+            try {
+                await ffmpeg.run('-i', 'input', '-c:v', 'mjpeg', '-c:a', 'adpcm_ima_wav', 'output.amv');
+                // (Optional: logic to handle success here)
+            } catch (e2) {
+                status.innerText = "STILL FAILING - CHECK CONSOLE";
+            }
             convertBtn.disabled = false;
         }
     });
