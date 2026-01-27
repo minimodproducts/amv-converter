@@ -68,7 +68,6 @@
             text-transform: uppercase; font-size: 1.2em; width: 100%; box-sizing: border-box;
         }
 
-        /* Error Log Box (Hidden unless needed) */
         #debugLog {
             display: none; margin-top: 20px; width: 100%; height: 100px;
             background: #000; border: 1px solid #333; color: #f00;
@@ -98,7 +97,7 @@
     <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">BUILD V4.0 - INPUT FIX</div>
+<div class="version-tag">BUILD V5.0 - HEADER PATCHER</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -136,12 +135,11 @@
         fileInfo.innerText = file.name.toUpperCase();
         fileInfo.style.color = "#eaba1f";
         status.innerText = "FILE LOADED";
-        debugLog.style.display = 'none'; // Hide log on new file
+        debugLog.style.display = 'none';
     }
 
     // --- CONVERSION LOGIC ---
     ffmpeg.setLogger(({ type, message }) => {
-        // Log ffmpeg output to the debug box
         debugLog.value += `[${type}] ${message}\n`;
         debugLog.scrollTop = debugLog.scrollHeight;
     });
@@ -153,7 +151,6 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
-        // Output Filename
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
         const outputName = `CLEAN_${originalName}-minimod.amv`;
 
@@ -162,31 +159,40 @@
             status.innerText = "LOADING ENGINE...";
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            // Step 1: Write file to memory (AS MP4 to avoid format guessing errors)
+            // 1. Write Input
             status.innerText = "READING FILE...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
-            // Step 2: Run FFmpeg
-            // Based on your sample file header (RIFF AMV), we use -f amv
-            status.innerText = "PROCESSING (AMV)...";
-            
+            // 2. Process as AVI (Using standard supported codecs)
+            status.innerText = "PROCESSING...";
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-r', '16',                  // Force 16 fps (Standard AMV)
+                '-r', '16',                  // Force 16 fps
                 '-s', '320x240',             // Size
-                '-ac', '1',                  // Mono Audio
+                '-ac', '1',                  // Mono
                 '-ar', '22050',              // 22050 Hz
-                '-q:v', '3',                 // High Quality JPEG
+                '-q:v', '3',                 // High Quality
                 '-c:v', 'mjpeg',             // Video Codec
-                '-c:a', 'adpcm_ima_amv',     // Audio Codec (AMV specific)
-                '-f', 'amv',                 // AMV Container
-                'output.amv'
+                '-c:a', 'adpcm_ima_wav',     // Standard AVI Audio Codec
+                '-vtag', 'MJPG',             // Force MJPG tag
+                '-f', 'avi',                 // FORCE AVI CONTAINER
+                'output.avi'
             );
 
-            // Step 3: Retrieve and Download
-            const data = ffmpeg.FS('readFile', 'output.amv');
-            const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
+            // 3. The "Header Hack"
+            // We read the AVI file and change the internal signature from "AVI " to "AMV "
+            status.innerText = "PATCHING HEADER...";
+            let data = ffmpeg.FS('readFile', 'output.avi');
             
+            // Look at bytes 8, 9, 10 (ASCII for 'AVI') and change 'V'(86) to 'M'(77)
+            // RIFF....AVI LIST -> RIFF....AMV LIST
+            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
+                 data[9] = 77; // Change V to M
+                 console.log("Header patched successfully: AVI -> AMV");
+            }
+
+            // 4. Download
+            const blob = new Blob([data.buffer], { type: 'application/octet-stream' });
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
             downloadLink.innerText = `DOWNLOAD ${outputName}`;
@@ -198,12 +204,8 @@
 
         } catch (e) {
             status.innerText = "ERROR! SEE DETAILS BELOW";
-            console.error(e);
-            
-            // Show the debug log so you can copy/paste it if needed
             debugLog.style.display = 'block';
             debugLog.value += `\nCRITICAL ERROR: ${e.message}`;
-            
             convertBtn.disabled = false;
         }
     });
