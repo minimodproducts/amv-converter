@@ -98,7 +98,7 @@
     <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">BUILD V7.0 - HYBRID ENGINE</div>
+<div class="version-tag">BUILD V8.0 - PC/MAC HYBRID</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -115,7 +115,7 @@
 
     let currentFile = null;
 
-    // --- SECURITY CHECK ---
+    // --- SECURITY CHECK (SharedArrayBuffer) ---
     if (typeof SharedArrayBuffer === 'undefined') {
         status.innerText = "SECURITY UPDATE REQUIRED...";
         setTimeout(() => location.reload(), 2000);
@@ -158,8 +158,9 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
+        // Output Filename (Matches PC script naming convention)
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `${originalName}_minimod.amv`;
+        const outputName = `${originalName}_minimod.avi`;
 
         try {
             convertBtn.disabled = true;
@@ -171,41 +172,49 @@
 
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            // 1. Write Input
+            // 1. Write Input (As mp4 to avoid format confusion)
             status.innerText = "READING FILE...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
             // 2. THE HYBRID COMMAND
-            // - Uses PC Filters: crop 4:3, flip, scale 320x240
-            // - Uses PC FPS: 21
-            // - Uses Web Codecs: MJPEG + ADPCM_IMA_WAV (Safe replacement for AMV)
-            // - Removes -block_size (Not supported on web)
-            status.innerText = "PROCESSING (HYBRID MODE)...";
+            // Visuals: Taken from PC Script (Crop 4:3, HFlip, Scale 320x240)
+            // Codecs: Taken from Mac Script (MJPEG, MJPEG2JPEG Filter, ADPCM_IMA_WAV)
+            // FPS: Taken from PC Script (21)
+            // Block Size: Removed (Not supported in Web/Mac logic, handled by default)
+            
+            status.innerText = "PROCESSING...";
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', 
-                '-c:v', 'mjpeg', '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-c:a', 'adpcm_ima_wav',
+                
+                // PC VISUALS
+                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240',
+                
+                // MAC ENGINE (Web-Compatible)
+                '-c:v', 'mjpeg', 
+                '-q:v', '3', 
+                '-vtag', 'MJPG', 
+                '-bsf:v', 'mjpeg2jpeg', // Critical Magic Filter from Mac
+                
+                // PC SPEED
                 '-r', '21',
+                
+                // AUDIO (Standard AVI/WAV compatible)
+                '-c:a', 'adpcm_ima_wav',
                 '-ac', '1',
                 '-ar', '22050',
+                
+                // FLAGS
+                '-map_metadata', '-1',
+                '-fflags', '+bitexact',
+                '-flags:v', '+bitexact',
+                
+                // CONTAINER (Both Mac and PC output AVI)
                 '-f', 'avi',
                 'output.avi'
             );
 
-            // 3. HEADER PATCH (AVI -> AMV)
-            // This tricks the device into accepting the AVI file as native AMV
-            status.innerText = "PATCHING HEADER...";
-            let data = ffmpeg.FS('readFile', 'output.avi');
-            
-            // Overwrite 'AVI ' with 'AMV ' at byte 8
-            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
-                 data[9] = 77; // Change V to M
-                 console.log("Header patched: AVI -> AMV");
-            }
-
-            // 4. Download
+            // 3. Download
+            const data = ffmpeg.FS('readFile', 'output.avi');
             const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             
             downloadLink.href = URL.createObjectURL(blob);
