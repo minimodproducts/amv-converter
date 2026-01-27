@@ -6,8 +6,6 @@
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
     <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
     
-    <script src="coi-serviceworker.js"></script>
-
     <style>
         :root {
             --bg-color: #000000;
@@ -28,10 +26,10 @@
         .card { 
             width: 90%; max-width: 500px; padding: 40px; 
             background: var(--card-bg); border-radius: 24px; text-align: center; 
-            border: 1px solid #222;
+            border: 1px solid #222; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
 
-        .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; }
+        .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; pointer-events: none; }
 
         .drop-zone {
             background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px;
@@ -62,6 +60,8 @@
             background: #000; border: 1px solid #333; color: #f55; 
             font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
         }
+        
+        .version-tag { margin-top: 15px; font-size: 10px; color: #444; }
     </style>
 </head>
 <body>
@@ -79,10 +79,12 @@
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly></textarea>
 </div>
+<div class="version-tag">LEGACY ENGINE V11.0 (NO SHARED MEMORY)</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.5/dist/ffmpeg.min.js"></script>
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
+    // Log enabled, but NO corePath needed for 0.9.5 default behavior
     const ffmpeg = createFFmpeg({ log: true });
     
     const uploader = document.getElementById('uploader');
@@ -97,11 +99,11 @@
         if(uploader.files.length){
             file = uploader.files[0];
             document.getElementById('fileInfo').innerText = file.name;
+            status.innerText = "FILE LOADED";
         }
     });
 
     ffmpeg.setLogger(({ message }) => {
-        // Only show debug log if it contains "Error"
         if(message.toLowerCase().includes("error")) {
             debug.style.display = 'block';
             debug.value += message + "\n";
@@ -113,7 +115,7 @@
         
         try {
             btn.disabled = true;
-            status.innerText = "LOADING...";
+            status.innerText = "LOADING LEGACY ENGINE...";
             
             if(!ffmpeg.isLoaded()) await ffmpeg.load();
             
@@ -122,15 +124,15 @@
 
             status.innerText = "CONVERTING...";
             
-            // --- THE GOLDEN COMMAND ---
-            // 1. VISUALS: Taken from PC Script (crop 4:3, flip, scale 320x240)
-            // 2. CODEC: Taken from Mac Script (mjpeg, mjpeg2jpeg filter)
-            // 3. AUDIO: Taken from Mac Script (adpcm_ima_wav 22050hz mono)
-            // 4. SPEED: Taken from PC Script (21 fps)
+            // --- THE FINAL HYBRID COMMAND ---
+            // Visuals: Partner's PC code (hflip, scale=320:240)
+            // Speed: Partner's PC code (21 fps)
+            // Codec: Mac App code (mjpeg + mjpeg2jpeg filter)
+            // Audio: Mac App code (adpcm_ima_wav)
             
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', 
+                '-vf', 'hflip,scale=320:240', 
                 '-c:v', 'mjpeg', 
                 '-q:v', '3', 
                 '-vtag', 'MJPG', 
@@ -143,9 +145,16 @@
                 'output.avi'
             );
 
-            const data = ffmpeg.FS('readFile', 'output.avi');
+            status.innerText = "PATCHING HEADER...";
+            let data = ffmpeg.FS('readFile', 'output.avi');
             
-            // Generate filename with .amv extension (Standard AVI structure inside)
+            // HEADER HACK: Turn "AVI" into "AMV"
+            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
+                 data[9] = 77; // V -> M
+                 console.log("Header patched: AVI -> AMV");
+            }
+
+            // Generate filename
             const name = file.name.split('.')[0] + "_minimod.amv";
             const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             
@@ -159,7 +168,7 @@
         } catch(e) {
             status.innerText = "ERROR";
             debug.style.display = 'block';
-            debug.value += "\nCRITICAL JS ERROR: " + e.message;
+            debug.value += "\nERROR: " + e.message;
             btn.disabled = false;
         }
     });
