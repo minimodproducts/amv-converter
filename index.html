@@ -98,7 +98,7 @@
     <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">BUILD V8.0 - PC/MAC HYBRID</div>
+<div class="version-tag">BUILD V8.1 - PC MATCH</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -115,10 +115,13 @@
 
     let currentFile = null;
 
-    // --- SECURITY CHECK (SharedArrayBuffer) ---
+    // --- SECURITY CHECK ---
     if (typeof SharedArrayBuffer === 'undefined') {
         status.innerText = "SECURITY UPDATE REQUIRED...";
-        setTimeout(() => location.reload(), 2000);
+        // Attempt to auto-reload to trigger the worker
+        setTimeout(() => {
+            if (typeof SharedArrayBuffer === 'undefined') location.reload();
+        }, 1500);
     }
 
     // --- UI LOGIC ---
@@ -158,7 +161,7 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
-        // Output Filename (Matches PC script naming convention)
+        // Output Filename (Matches PC script convention)
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
         const outputName = `${originalName}_minimod.avi`;
 
@@ -166,57 +169,55 @@
             convertBtn.disabled = true;
             status.innerText = "LOADING ENGINE...";
             
+            // Re-check security before start
             if (typeof SharedArrayBuffer === 'undefined') {
-                 throw new Error("Browser Security Block. Please reload the page twice.");
+                 throw new Error("Browser Security Block. Please create 'coi-serviceworker.js' in GitHub and refresh the page.");
             }
 
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            // 1. Write Input (As mp4 to avoid format confusion)
+            // 1. Write Input
             status.innerText = "READING FILE...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
-            // 2. THE HYBRID COMMAND
-            // Visuals: Taken from PC Script (Crop 4:3, HFlip, Scale 320x240)
-            // Codecs: Taken from Mac Script (MJPEG, MJPEG2JPEG Filter, ADPCM_IMA_WAV)
-            // FPS: Taken from PC Script (21)
-            // Block Size: Removed (Not supported in Web/Mac logic, handled by default)
+            // 2. THE PARTNER COMMAND
+            // PC Command: -vf "hflip,scale=320:240" -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050
+            // Web Translation: 
+            // - Visuals: hflip,scale=320:240
+            // - Codec: mjpeg + mjpeg2jpeg (The Web equivalent of 'amv')
+            // - Audio: adpcm_ima_wav (The Web equivalent of 'adpcm_ima_amv')
             
             status.innerText = "PROCESSING...";
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                
-                // PC VISUALS
-                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240',
-                
-                // MAC ENGINE (Web-Compatible)
-                '-c:v', 'mjpeg', 
-                '-q:v', '3', 
-                '-vtag', 'MJPG', 
-                '-bsf:v', 'mjpeg2jpeg', // Critical Magic Filter from Mac
-                
-                // PC SPEED
-                '-r', '21',
-                
-                // AUDIO (Standard AVI/WAV compatible)
+                '-vf', 'hflip,scale=320:240', // Exact visual filter from your snippet
+                '-c:v', 'mjpeg', '-q:v', '3',
+                '-vtag', 'MJPG',
+                '-bsf:v', 'mjpeg2jpeg',
                 '-c:a', 'adpcm_ima_wav',
+                '-r', '21',
                 '-ac', '1',
                 '-ar', '22050',
-                
-                // FLAGS
                 '-map_metadata', '-1',
                 '-fflags', '+bitexact',
                 '-flags:v', '+bitexact',
-                
-                // CONTAINER (Both Mac and PC output AVI)
                 '-f', 'avi',
                 'output.avi'
             );
 
-            // 3. Download
-            const data = ffmpeg.FS('readFile', 'output.avi');
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
+            // 3. HEADER PATCH (The "Secret Sauce")
+            // This tricks the device into seeing an AMV file structure
+            status.innerText = "PATCHING HEADER...";
+            let data = ffmpeg.FS('readFile', 'output.avi');
             
+            // Change 'AVI ' to 'AMV ' in the binary header
+            if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
+                 data[9] = 77; 
+                 console.log("Header patched: AVI -> AMV");
+            }
+
+            // 4. Download
+            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
             downloadLink.innerText = `DOWNLOAD ${outputName}`;
