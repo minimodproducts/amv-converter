@@ -3,90 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Magic AMV Converter</title>
-    
+    <title>Mini-Mod | Magic AMV Converter</title>
     <script src="coi-serviceworker.js"></script>
-
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { padding: 20px; border: 1px solid #ccc; border-radius: 8px; text-align: center; background: #f9f9f9; max-width: 500px; margin: 40px auto; }
-        #convertBtn { padding: 12px 24px; background: #007aff; color: #fff; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 20px; }
-        #convertBtn:disabled { background: #ccc; cursor: not-allowed; }
-        #status { margin-top: 20px; font-weight: bold; color: #007aff; }
-        #downloadLink { display: none; margin-top: 20px; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; }
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #111111;
+            --accent-color: #007aff; /* Standard Apple/Tech Blue */
+            --border-radius: 12px;
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card { 
+            width: 90%;
+            max-width: 450px;
+            padding: 40px; 
+            border: 1px solid #eaeaea; 
+            border-radius: var(--border-radius); 
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        .logo {
+            font-weight: 800;
+            letter-spacing: -1px;
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        p { color: #666; font-size: 0.9em; margin-bottom: 30px; }
+        
+        /* Custom File Upload */
+        input[type="file"] { margin-bottom: 20px; font-size: 0.8em; }
+
+        #convertBtn { 
+            width: 100%;
+            padding: 15px; 
+            background: var(--text-color); 
+            color: #fff; 
+            border: none; 
+            border-radius: var(--border-radius); 
+            cursor: pointer; 
+            font-weight: 600;
+            transition: transform 0.2s ease;
+        }
+        #convertBtn:hover { transform: scale(1.02); }
+        #convertBtn:disabled { background: #ccc; transform: none; }
+
+        #status { margin-top: 25px; font-size: 0.85em; font-weight: 500; color: var(--accent-color); }
+        
+        #downloadLink { 
+            display: none; 
+            margin-top: 20px; 
+            padding: 15px; 
+            background: var(--accent-color); 
+            color: white; 
+            text-decoration: none; 
+            border-radius: var(--border-radius);
+            font-weight: 600;
+            width: 100%;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2 style="margin-top:0;">Magic AMV Converter</h2>
-    <p style="font-size: 0.9em; color: #555;">Translates video to 320x240 MJPEG AVI</p>
+<div class="card">
+    <div class="logo">MINI-MOD</div>
+    <p>AMV Video Utility v1.0</p>
     
     <input type="file" id="uploader" accept="video/*">
-    <br>
-    <button id="convertBtn">Convert to AMV/AVI</button>
+    <button id="convertBtn">Convert to AMV</button>
 
-    <div id="status"></div>
-    <a id="downloadLink">Download CLEAN_VIDEO.AVI</a>
+    <div id="status">Ready</div>
+    <a id="downloadLink">Download File</a>
 </div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
-
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    
-    // This version is faster but requires the coi-serviceworker to be working
     const ffmpeg = createFFmpeg({ log: true });
-
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
     const downloadLink = document.getElementById('downloadLink');
 
     convertBtn.addEventListener('click', async () => {
         const uploader = document.getElementById('uploader');
-        if (uploader.files.length === 0) return alert('Please select a file!');
+        if (uploader.files.length === 0) return alert('Select a video');
 
         try {
             convertBtn.disabled = true;
-            status.innerText = "Step 1: Loading Engine...";
-            
+            status.innerText = "INITIALIZING ENGINE...";
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
             const file = uploader.files[0];
-            status.innerText = "Step 2: Processing (This takes a moment)...";
+            status.innerText = "PROCESSING MAGIC AMV...";
 
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // Using your exact AppleScript Logic
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
-                '-c:v', 'mjpeg',
-                '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',
-                '-c:a', 'adpcm_ima_wav',
-                '-ac', '1',
-                '-ar', '22050',
-                '-map_metadata', '-1',
-                '-fflags', '+bitexact',
-                '-flags:v', '+bitexact',
-                '-f', 'avi',
-                'CLEAN_OUTPUT.AVI'
+                '-c:v', 'mjpeg', '-q:v', '3', '-vtag', 'MJPG', '-bsf:v', 'mjpeg2jpeg',
+                '-c:a', 'adpcm_ima_wav', '-ac', '1', '-ar', '22050',
+                '-map_metadata', '-1', '-fflags', '+bitexact', '-flags:v', '+bitexact',
+                '-f', 'avi', 'CLEAN_OUTPUT.AVI'
             );
 
             const data = ffmpeg.FS('readFile', 'CLEAN_OUTPUT.AVI');
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
-            const url = URL.createObjectURL(blob);
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-msvideo' }));
             
-            status.innerText = "✅ Done!";
+            status.innerText = "CONVERSION SUCCESSFUL";
             downloadLink.href = url;
             downloadLink.download = 'CLEAN_VIDEO.AVI';
-            downloadLink.style.display = 'inline-block';
+            downloadLink.style.display = 'block';
+            convertBtn.style.display = 'none';
 
         } catch (e) {
-            console.error(e);
-            status.innerText = "Error! Please refresh and try again.";
+            status.innerText = "ERROR: REFRESH AND TRY AGAIN";
         } finally {
             convertBtn.disabled = false;
         }
