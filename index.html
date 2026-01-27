@@ -31,6 +31,7 @@
         #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
         #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
         #downloadLink { display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; text-decoration: none; border-radius: var(--border-radius); font-weight: 900; text-transform: uppercase; font-size: 1.2em; width: 100%; box-sizing: border-box; }
+        #resetBtn { display: none; margin-top: 10px; color: var(--sub-text); cursor: pointer; font-size: 0.8em; text-decoration: underline; background: none; border: none; width: 100%; }
     </style>
 </head>
 <body>
@@ -47,6 +48,7 @@
     <button id="convertBtn">CONVERT VIDEO</button>
     <div id="status">System Ready</div>
     <a id="downloadLink">Download File</a>
+    <button id="resetBtn">CONVERT ANOTHER</button>
 </div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
@@ -60,10 +62,11 @@
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
     const downloadLink = document.getElementById('downloadLink');
+    const resetBtn = document.getElementById('resetBtn');
 
     let currentFile = null;
 
-    // Fixed Drag & Drop Logic
+    // Drag and Drop Logic
     ['dragenter', 'dragover'].forEach(name => {
         dropArea.addEventListener(name, (e) => {
             e.preventDefault();
@@ -76,10 +79,9 @@
             e.preventDefault();
             dropArea.classList.remove('drag-over');
             if (name === 'drop') {
-                const files = e.dataTransfer.files;
-                if (files.length > 0) {
-                    uploader.files = files; // Sync the drop to the input
-                    handleFileSelection(files[0]);
+                if (e.dataTransfer.files.length > 0) {
+                    uploader.files = e.dataTransfer.files;
+                    handleFileSelection(e.dataTransfer.files[0]);
                 }
             }
         });
@@ -102,9 +104,8 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video');
         
-        // Handle Filename: strip extension and add -minimod
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const outputName = `${originalName}-minimod.avi`;
+        const outputName = `CLEAN_${originalName}-minimod.AVI`;
 
         try {
             convertBtn.disabled = true;
@@ -114,7 +115,7 @@
             status.innerText = "PROCESSING MAGIC AMV...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // EXACT REPLICA OF APPLESCRIPT COMMAND
+            // EXPLICIT MAPPING FROM YOUR APPLESCRIPT
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -137,17 +138,21 @@
             
             downloadLink.href = URL.createObjectURL(blob);
             downloadLink.download = outputName;
-            downloadLink.innerText = `DOWNLOAD ${outputName.toUpperCase()}`;
+            downloadLink.innerText = `DOWNLOAD ${outputName}`;
             
             status.innerText = "COMPLETE";
             downloadLink.style.display = 'block';
+            resetBtn.style.display = 'block';
             convertBtn.style.display = 'none';
             dropArea.style.display = 'none';
         } catch (e) {
             status.innerText = "ERROR - PLEASE REFRESH";
-            console.error(e);
             convertBtn.disabled = false;
         }
+    });
+
+    resetBtn.addEventListener('click', () => {
+        location.reload();
     });
 </script>
 </body>
