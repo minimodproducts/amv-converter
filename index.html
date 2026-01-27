@@ -50,8 +50,9 @@
         #convertBtn { 
             width: 100%; padding: 20px; background: var(--gradient); border: none; 
             border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer;
+            opacity: 0.5; cursor: not-allowed; /* Disabled until loaded */
         }
-        #convertBtn:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
+        #convertBtn.ready { opacity: 1; cursor: pointer; }
 
         #status { margin-top: 20px; font-weight: bold; color: var(--accent); min-height: 20px; white-space: pre-wrap;}
         
@@ -61,7 +62,7 @@
         }
         
         #debugLog {
-            display: none; width: 100%; height: 100px; margin-top: 20px;
+            display: block; width: 100%; height: 100px; margin-top: 20px;
             background: #000; border: 1px solid #333; color: #f55; 
             font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
         }
@@ -75,25 +76,23 @@
     <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" class="logo-img">
     
     <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE</div>
+        <div id="fileInfo" class="drop-label">LOADING ENGINE...</div>
     </div>
 
-    <button id="convertBtn">CONVERT VIDEO</button>
-    <div id="status">INITIALIZING ENGINE...</div>
+    <button id="convertBtn" disabled>WAITING FOR ENGINE...</button>
+    <div id="status">INITIALIZING...</div>
     <a id="downloadLink">DOWNLOAD</a>
-    <textarea id="debugLog" readonly></textarea>
+    <textarea id="debugLog" readonly>Log Output:</textarea>
 </div>
-<div class="version-tag">NUCLEAR ENGINE V15.0 (HYBRID LOADING)</div>
+<div class="version-tag">NUCLEAR ENGINE V16.0 (BLOB LOAD STRATEGY)</div>
 
 <script>
-    // Access the libraries loaded from the script tags
     const { FFmpeg } = FFmpegWASM;
-    const { fetchFile } = FFmpegUtil;
+    const { fetchFile, toBlobURL } = FFmpegUtil;
     
     let ffmpeg = null;
     let selectedFile = null;
 
-    // UI Elements
     const btn = document.getElementById('convertBtn');
     const status = document.getElementById('status');
     const link = document.getElementById('downloadLink');
@@ -101,37 +100,60 @@
     const dropArea = document.getElementById('dropArea');
     const fileInfo = document.getElementById('fileInfo');
 
-    const logError = (msg) => {
-        debug.style.display = 'block';
+    const log = (msg) => {
         debug.value += `\n${msg}`;
+        debug.scrollTop = debug.scrollHeight;
     };
 
-    // --- ENGINE INITIALIZATION (The Fix) ---
+    // --- ENGINE INITIALIZATION (BLOB STRATEGY) ---
     const initEngine = async () => {
         try {
+            log("System Check: Starting...");
             ffmpeg = new FFmpeg();
+            
             ffmpeg.on('log', ({ message }) => {
-                if (message.toLowerCase().includes('error')) logError(message);
+                // Log progress events
+                if (message.includes('frame=')) status.innerText = "Processing...";
                 console.log(message);
             });
 
-            // HYBRID LOADING:
-            // 1. coreURL: Uses your LOCAL 'ffmpeg-core.js' (Bypasses Security)
-            // 2. wasmURL: Uses the CDN 'ffmpeg-core.wasm' (Bypasses 25MB Upload Limit)
+            log("Downloading Core Files from CDN...");
+            
+            // We use version 0.12.6 to ensure stability
+            const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+            
+            // 1. Download the JS file and create a local Blob URL
+            const coreBlob = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+            log("Core JS downloaded.");
+
+            // 2. Download the WASM file (25MB) and create a local Blob URL
+            const wasmBlob = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+            log("Core WASM downloaded.");
+
+            // 3. Load them into the engine
             await ffmpeg.load({
-                coreURL: 'ffmpeg-core.js', 
-                wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+                coreURL: coreBlob,
+                wasmURL: wasmBlob
             });
 
-            status.innerText = "READY";
+            log("Engine Loaded Successfully!");
+            status.innerText = "READY - DROP VIDEO";
+            fileInfo.innerText = "DRAG VIDEO HERE";
+            
+            // Enable the button
+            btn.disabled = false;
+            btn.classList.add('ready');
+            btn.innerText = "CONVERT VIDEO";
+
         } catch (e) {
-            status.innerText = "ENGINE ERROR";
-            logError("Failed to load FFmpeg: " + e.message);
+            status.innerText = "ENGINE FAILED";
+            log("CRITICAL ERROR: " + e.message);
             console.error(e);
+            alert("Engine failed to load. Check the red log box for details.");
         }
     };
 
-    // --- DRAG AND DROP LOGIC ---
+    // --- DRAG AND DROP ---
     dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
     dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
     dropArea.addEventListener('drop', (e) => {
@@ -144,7 +166,6 @@
         }
     });
 
-    // Support Click-to-Upload as well
     dropArea.addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -159,20 +180,26 @@
         input.click();
     });
 
-    // --- CONVERSION LOGIC ---
+    // --- CONVERT ---
     btn.addEventListener('click', async () => {
         if (!selectedFile) return alert("Please drag a video first!");
-        if (!ffmpeg || !ffmpeg.loaded) return alert("Engine not ready yet.");
+        
+        // Double check engine status
+        if (!ffmpeg || !ffmpeg.loaded) {
+            return alert("Engine is not ready yet. Please look at the logs.");
+        }
 
         try {
             btn.disabled = true;
+            btn.innerText = "WORKING...";
             status.innerText = "READING FILE...";
+            log("Reading input file...");
             
             await ffmpeg.writeFile('input.mp4', await fetchFile(selectedFile));
 
             status.innerText = "CONVERTING...";
+            log("Running FFmpeg conversion...");
 
-            // The Command (Matches your AppleScript exactly)
             await ffmpeg.exec([
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -188,15 +215,17 @@
                 'output.avi'
             ]);
 
+            log("Conversion done. Patching header...");
             status.innerText = "PATCHING HEADER...";
             
-            // Header Hack
             const data = await ffmpeg.readFile('output.avi');
+            
+            // Header Hack: AVI -> AMI/AMV
             if (data[8] === 65 && data[9] === 86 && data[10] === 73) { 
-                 data[9] = 77; // Swap 'V' for 'M' -> 'AMI' (Based on your original logic)
+                 data[9] = 77; 
+                 log("Header patched: AVI -> AMI");
             }
 
-            // Download Link
             const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             const name = selectedFile.name.split('.')[0] + "_minimod.amv";
             
@@ -206,16 +235,17 @@
             link.style.display = "block";
             
             status.innerText = "DONE!";
+            log("Process Complete.");
             btn.style.display = "none";
 
         } catch (e) {
             status.innerText = "ERROR";
-            logError("Conversion Error: " + e.message);
+            log("Conversion Error: " + e.message);
             btn.disabled = false;
+            btn.innerText = "TRY AGAIN";
         }
     });
 
-    // Start Engine on Load
     initEngine();
 </script>
 </body>
