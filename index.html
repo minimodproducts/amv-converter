@@ -98,7 +98,7 @@
     <textarea id="debugLog" readonly></textarea>
 </div>
 
-<div class="version-tag">CLEAN SLATE V1.0 - HYBRID ENGINE</div>
+<div class="version-tag">HYBRID ENGINE V9.0</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
@@ -117,9 +117,8 @@
 
     // --- SECURITY CHECK ---
     if (typeof SharedArrayBuffer === 'undefined') {
-        status.innerText = "⚠️ MISSING SECURITY FILE. REFRESH PAGE...";
-        // Auto-refresh to try and catch the service worker
-        setTimeout(() => location.reload(), 2000);
+        status.innerText = "SECURITY ERROR: REFRESH PAGE TWICE";
+        setTimeout(() => location.reload(), 3000);
     }
 
     // --- UI HANDLERS ---
@@ -156,11 +155,10 @@
         status.innerText = `CONVERTING: ${Math.round(ratio * 100)}%`;
     });
 
-    // --- THE MAIN EVENT ---
+    // --- MAIN LOGIC ---
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Select a video first.');
         
-        // Naming Strategy: Matches PC script (name_minimod.amv)
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
         const outputName = `${originalName}_minimod.amv`;
 
@@ -168,67 +166,43 @@
             convertBtn.disabled = true;
             status.innerText = "STARTING ENGINE...";
             
-            // Hard Stop if security is missing
             if (typeof SharedArrayBuffer === 'undefined') {
-                 status.innerText = "ERROR: REFRESH PAGE TWICE";
-                 throw new Error("SharedArrayBuffer missing. Browser requires page refresh.");
+                 throw new Error("Security Error. You must ensure 'coi-serviceworker.js' is in your repo and then refresh the page twice.");
             }
 
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            // 1. SAFE LOAD: Rename input to avoid format errors
+            // 1. Write Input
             status.innerText = "READING FILE...";
-            ffmpeg.FS('writeFile', 'input_video', await fetchFile(currentFile));
+            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(currentFile));
 
-            // 2. THE HYBRID COMMAND
-            // VISUALS: Copied from your Partner's PC Script (Crop 4:3, HFlip, Scale 320x240)
-            // FORMAT: Copied from your Mac Script (MJPEG AVI, ADPCM Audio)
-            // FPS: Copied from Partner's Script (21)
-            
-            status.innerText = "PROCESSING (HYBRID MODE)...";
+            // 2. RUN FFMPEG (PC VISUALS + MAC ENGINE)
+            // -vf "hflip,scale=320:240" (From PC Script)
+            // -c:v mjpeg (From Mac Script, replaces incompatible 'amv' codec)
+            // -r 21 (From PC Script)
+            status.innerText = "PROCESSING...";
             
             await ffmpeg.run(
-                '-i', 'input_video',
-                
-                // VISUALS (PC MATCH)
-                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240',
-                
-                // ENCODING (MAC MATCH - WEB SAFE)
-                '-c:v', 'mjpeg', 
-                '-q:v', '3', 
-                '-vtag', 'MJPG', 
-                '-bsf:v', 'mjpeg2jpeg', // The Mac App's Secret Weapon
-                
-                // AUDIO (MAC MATCH - WEB SAFE)
-                '-c:a', 'adpcm_ima_wav',
-                '-ac', '1',
-                '-ar', '22050',
-                
-                // TIMING (PC MATCH)
-                '-r', '21',
-                
-                // CLEANUP
-                '-map_metadata', '-1',
-                '-fflags', '+bitexact',
-                '-flags:v', '+bitexact',
-                
-                // CONTAINER (AVI - We will patch this later)
-                '-f', 'avi',
+                '-i', 'input.mp4',
+                '-vf', 'hflip,scale=320:240', // PC Visuals
+                '-c:v', 'mjpeg', '-q:v', '3', // Web-safe Video
+                '-c:a', 'adpcm_ima_wav',      // Web-safe Audio
+                '-ac', '1',                   // Mono
+                '-ar', '22050',               // 22050 Hz
+                '-r', '21',                   // PC Speed
+                '-f', 'avi',                  // Container
                 'output.avi'
             );
 
-            // 3. THE HEADER HACK (The "Magic Trick")
-            // We take the valid AVI file and manually change the letters "AVI" to "AMV"
-            // This makes the device think it's a native AMV file.
+            // 3. HEADER HACK (AVI -> AMV)
             status.innerText = "FINALIZING...";
-            
             let data = ffmpeg.FS('readFile', 'output.avi');
             
-            // PATCH: Byte 8='A', Byte 9='V', Byte 10='I' -> Change 'V' to 'M'
-            // Header becomes "RIFF....AMV "
+            // Change the file signature bytes from AVI to AMV
+            // This tricks the device into reading the file
             if (data[8] === 65 && data[9] === 86 && data[10] === 73) {
-                 data[9] = 77; // 77 is ASCII for 'M'
-                 console.log("SUCCESS: File header patched from AVI to AMV");
+                 data[9] = 77; // V -> M
+                 console.log("Header patched: AVI -> AMV");
             }
 
             // 4. DOWNLOAD
@@ -245,7 +219,7 @@
         } catch (e) {
             status.innerText = "ERROR! SEE LOG BELOW";
             debugLog.style.display = 'block';
-            debugLog.value += `\nCRITICAL ERROR: ${e.message}\nIf SharedArrayBuffer is missing, REFRESH THE PAGE TWICE.`;
+            debugLog.value += `\nCRITICAL ERROR: ${e.message}`;
             convertBtn.disabled = false;
         }
     });
