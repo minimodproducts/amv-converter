@@ -3,256 +3,162 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MINI-MOD | APPLE-SCRIPT ENGINE</title>
+    <title>MINI-MOD | APPLE-SCRIPT ENGINE (WEB)</title>
     
-    <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
-
-    <script src="coi-serviceworker.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
     <style>
         :root {
             --bg-color: #000000;
             --card-bg: #111111;
-            --inner-bg: #1a1a1a;
             --text-color: #ffffff;
-            --sub-text: #888888;
-            --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
-            --border-radius: 12px;
+            --accent: #eaba1f;
         }
-        
-        html, body { 
-            background-color: var(--bg-color) !important; 
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow-x: hidden;
-        }
-
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            color: var(--text-color);
-            display: flex; justify-content: center; align-items: center; flex-direction: column;
+            background-color: var(--bg-color); color: var(--text-color);
+            font-family: sans-serif; display: flex; flex-direction: column; 
+            align-items: center; min-height: 100vh; margin: 0; padding: 20px;
         }
-
         .card { 
-            width: 90%;
-            max-width: 500px;
-            padding: 40px 30px; 
-            background: var(--card-bg);
-            border-radius: 24px; 
-            text-align: center;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
-            border: 1px solid #222;
-            position: relative;
-            z-index: 10;
+            width: 100%; max-width: 480px; padding: 30px; 
+            background: var(--card-bg); border-radius: 20px; 
+            border: 1px solid #333; text-align: center; margin-top: 40px;
         }
-
-        .logo-img { 
-            width: 90%; max-width: 450px; height: auto; 
-            margin-bottom: 5px; display: inline-block; 
-            pointer-events: none;
-        }
-
-        .tool-title { 
-            color: var(--sub-text); font-size: 0.9em; margin-bottom: 30px; 
-            letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
-        }
-
-        .drop-zone {
-            background: var(--inner-bg);
-            border: 2px dashed #333;
-            border-radius: 16px;
-            height: 150px;
-            margin-bottom: 25px;
-            position: relative;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
-        .drop-zone:hover { border-color: #444; background: #1e1e1e; }
-        .drop-zone.drag-over { border-color: #53c0c5; background: #222; transform: scale(1.02); }
-
-        .drop-label { 
-            font-size: 0.85em; color: #53c0c5; font-weight: 700; 
-            letter-spacing: 1px; pointer-events: none; z-index: 5;
-            padding: 20px;
-        }
-
-        #uploader {
-            position: absolute;
-            width: 100%; height: 100%;
-            top: 0; left: 0;
-            opacity: 0;
-            cursor: pointer;
-            z-index: 10;
-            display: block;
-        }
-
-        #convertBtn { 
-            width: 100%; padding: 22px; 
-            background: var(--gradient); color: #000; 
-            border: none; border-radius: var(--border-radius); 
-            cursor: pointer; font-weight: 900; font-size: 1.4em; 
-            text-transform: uppercase; letter-spacing: 1px; 
-            transition: all 0.3s ease;
-        }
-
-        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
-        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
-
-        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
+        .logo { width: 80%; max-width: 300px; margin-bottom: 20px; }
         
-        #downloadLink { 
-            display: none; margin-top: 15px; padding: 22px; 
-            background: #fff; color: #000; text-decoration: none; 
-            border-radius: var(--border-radius); font-weight: 900; 
-            text-transform: uppercase; font-size: 1.2em; 
-            width: 100%; box-sizing: border-box;
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed #444; border-radius: 12px;
+            padding: 40px 20px; margin: 20px 0;
+            background: #1a1a1a; cursor: pointer; position: relative;
         }
-
-        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
+        .drop-zone:hover { border-color: var(--accent); background: #222; }
+        #uploader { position: absolute; width: 100%; height: 100%; top:0; left:0; opacity: 0; cursor: pointer; }
+        
+        /* Buttons */
+        #convertBtn { 
+            width: 100%; padding: 18px; background: var(--accent); 
+            color: #000; border: none; border-radius: 8px; 
+            font-weight: bold; font-size: 16px; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        #convertBtn:disabled { background: #444; color: #888; cursor: wait; }
+        
+        /* Logs */
+        #status { margin-top: 15px; color: var(--accent); font-weight: bold; }
+        #error-log { 
+            margin-top: 20px; background: #000; color: #ff5555; 
+            font-family: monospace; padding: 10px; border-radius: 6px; 
+            font-size: 11px; text-align: left; display: none; 
+            white-space: pre-wrap; height: 100px; overflow-y: auto; border: 1px solid #555;
+        }
+        
+        #downloadLink { display: none; margin-top: 15px; color: #fff; text-decoration: underline; font-size: 1.2em; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
-    <div class="tool-title">VIDEO CONVERSION TOOL</div>
+    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" class="logo" alt="LOGO">
     
-    <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
+    <div class="drop-zone">
+        <div id="fileInfo">DRAG VIDEO HERE</div>
         <input type="file" id="uploader" accept="video/*">
     </div>
 
-    <button id="convertBtn">CONVERT VIDEO</button>
-    <div id="status">System Ready</div>
-    <a id="downloadLink">Download File</a>
+    <button id="convertBtn">CONVERT FILE</button>
+    <div id="status">READY</div>
+    <div id="error-log"></div>
+    <a id="downloadLink">Download Video</a>
 </div>
-
-<div class="version-tag">BUILD V3.0 - APPLESCRIPT EXACT MATCH</div>
-
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: true });
     
-    // UI Elements
-    const dropArea = document.getElementById('dropArea');
+    // USE SINGLE THREADED CORE (No service worker needed, highly stable)
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
+
     const uploader = document.getElementById('uploader');
-    const fileInfo = document.getElementById('fileInfo');
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
+    const errorLog = document.getElementById('error-log');
     const downloadLink = document.getElementById('downloadLink');
-
     let currentFile = null;
 
-    /* --- UI LOGIC --- */
-    
     uploader.addEventListener('change', () => {
-        if (uploader.files.length > 0) {
-            handleFile(uploader.files[0]);
+        if(uploader.files[0]) {
+            currentFile = uploader.files[0];
+            document.getElementById('fileInfo').innerText = currentFile.name;
+            document.getElementById('fileInfo').style.color = "#eaba1f";
+            errorLog.style.display = 'none';
         }
-    });
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, (e) => {
-            e.preventDefault(); e.stopPropagation();
-            dropArea.classList.add('drag-over');
-        }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, (e) => {
-            e.preventDefault(); e.stopPropagation();
-            dropArea.classList.remove('drag-over');
-        }, false);
-    });
-
-    dropArea.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files.length > 0) {
-            uploader.files = files; 
-            handleFile(files[0]);
-        }
-    });
-
-    function handleFile(file) {
-        currentFile = file;
-        fileInfo.innerText = file.name.toUpperCase();
-        fileInfo.style.color = "#eaba1f";
-        status.innerText = "FILE LOADED - READY TO CONVERT";
-    }
-
-    /* --- EXACT APPLESCRIPT ENGINE LOGIC --- */
-    
-    ffmpeg.setProgress(({ ratio }) => {
-        status.innerText = `CONVERTING: ${Math.round(ratio * 100)}%`;
     });
 
     convertBtn.addEventListener('click', async () => {
-        if (!currentFile) return alert('Please select a video file first.');
+        if (!currentFile) return alert("Please select a file.");
         
-        // Setup Names EXACTLY like the AppleScript
-        const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const internalFile = "output.avi"; 
-        const finalFileName = `CLEAN_${originalName}.AVI`; 
-
         try {
             convertBtn.disabled = true;
-            status.innerText = "LOADING ENGINE...";
-            
+            status.innerText = "LOADING ENGINE (Wait ~20s)...";
+            errorLog.style.display = 'none';
+
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
-            
-            status.innerText = "PROCESSING (CLEAN ROOM MJPEG)...";
-            
+
+            status.innerText = "CONVERTING...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // --- APPLESCRIPT TRANSLATION ---
-            // Original: -i input -vf "scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2" 
-            // -c:v mjpeg -q:v 3 -vtag MJPG -bsf:v mjpeg2jpeg -c:a adpcm_ima_wav -ac 1 -ar 22050 
-            // -map_metadata -1 -fflags +bitexact -flags:v +bitexact -f avi -y out1
-            
+            // --- THE EXACT APPLESCRIPT SETTINGS ---
+            // Note: I removed '-bsf:v mjpeg2jpeg' because it crashes the web engine.
+            // All other settings are identical to your script.
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
                 '-c:v', 'mjpeg',
                 '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',     // Critical for old players
-                '-c:a', 'adpcm_ima_wav',    // Note: using WAV variant of IMA ADPCM as per script
-                '-ac', '1',
-                '-ar', '22050',
-                '-map_metadata', '-1',
-                '-fflags', '+bitexact',
+                '-vtag', 'MJPG',            // Forces MJPEG tag for compatibility
+                '-c:a', 'adpcm_ima_wav',    // Exact codec from your script
+                '-ac', '1',                 // Mono
+                '-ar', '22050',             // 22050Hz
+                '-map_metadata', '-1',      // Strip metadata
+                '-fflags', '+bitexact',     // Rigid headers
                 '-flags:v', '+bitexact',
-                '-f', 'avi',
+                '-f', 'avi',                // AVI Container
                 '-y',
-                internalFile
+                'output.avi'
             );
 
-            const data = ffmpeg.FS('readFile', internalFile);
-
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
+            // Read output
+            const data = ffmpeg.FS('readFile', 'output.avi');
             
+            // Create Download
+            const blob = new Blob([data.buffer], { type: 'video/avi' });
             const url = URL.createObjectURL(blob);
-            downloadLink.href = url;
-            downloadLink.download = finalFileName;
-            downloadLink.innerText = `DOWNLOAD ${finalFileName}`;
             
-            status.innerText = "CONVERSION COMPLETE";
-            downloadLink.style.display = 'block';
-            convertBtn.style.display = 'none';
-            dropArea.style.display = 'none';
+            // Use Original Name + CLEAN
+            const cleanName = "CLEAN_" + currentFile.name.replace(/\.[^/.]+$/, "") + ".AVI";
+            
+            downloadLink.href = url;
+            downloadLink.download = cleanName;
+            downloadLink.innerText = "DOWNLOAD " + cleanName;
+            downloadLink.style.display = "block";
+            downloadLink.click(); // Auto-click download
+            
+            status.innerText = "DONE!";
 
         } catch (e) {
             console.error(e);
-            status.innerText = "ERROR: SEE CONSOLE";
+            status.innerText = "FAILED";
+            errorLog.style.display = "block";
+            // This prints the REAL error to the screen
+            errorLog.innerText = "ERROR DETAILS:\n" + e.message; 
+        } finally {
             convertBtn.disabled = false;
         }
     });
 </script>
+
 </body>
 </html>
