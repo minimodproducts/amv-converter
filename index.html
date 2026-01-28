@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Simple AMV Tool</title>
+    <title>Minimod AMV Tool (Patched)</title>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #222; color: #fff; text-align: center; padding: 20px; }
@@ -15,7 +15,7 @@
 <body>
 
 <div class="box">
-    <h2>Minimod Converter (Web Compatible)</h2>
+    <h2>Minimod AMV Converter</h2>
     <input type="file" id="uploader" accept="video/mp4" style="margin: 20px 0;">
     <button id="convertBtn">Convert Video</button>
     <div id="status" style="margin-top:10px; color: #aaa;">Status: Ready</div>
@@ -24,8 +24,6 @@
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    
-    // We use the basic version. No special headers needed.
     const ffmpeg = createFFmpeg({ log: true });
 
     const btn = document.getElementById('convertBtn');
@@ -42,42 +40,72 @@
         if (!file) return alert("Select a file first");
 
         btn.disabled = true;
-        status.innerText = "Loading Engine (This happens once)...";
+        status.innerText = "Loading Engine (Wait ~30s)...";
 
         try {
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-            status.innerText = "Processing... (Do not close)";
+            status.innerText = "Converting... (Do not close)";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // THE FIX:
-            // 1. We use '-f avi' because the web version crashes on '-f amv'
-            // 2. We keep your exact resolution, flip, and fps.
-            // 3. We save it as .amv so the device recognizes it.
+            // STEP 1: Convert to AVI using standard MJPEG (which is what AMV uses internally)
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
-                '-r', '21',
-                '-ac', '1',
-                '-ar', '22050',
-                '-c:v', 'mjpeg',       // Use MJPEG (Standard for AMV players)
-                '-q:v', '3',           // High quality
-                '-c:a', 'adpcm_ima_wav', // Standard IMA ADPCM audio
-                '-f', 'avi',           // Force AVI container (Web safe)
-                'output.amv'
+                '-r', '21',               // Exact frame rate
+                '-ac', '1',               // Mono audio
+                '-ar', '22050',           // 22k Audio
+                '-c:v', 'mjpeg',          // Use standard JPEG video
+                '-q:v', '3',              // High quality
+                '-c:a', 'adpcm_ima_wav',  // Standard ADPCM audio
+                '-f', 'avi',              // Force AVI container
+                'temp.avi'
             );
 
-            status.innerText = "Success! Downloading...";
-            const data = ffmpeg.FS('readFile', 'output.amv');
-            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
+            status.innerText = "Patching file header...";
             
+            // STEP 2: Read the AVI file
+            let data = ffmpeg.FS('readFile', 'temp.avi');
+            
+            // STEP 3: Hack the header bytes to trick the Minimod
+            // We search for "AVI " and replace it with "AMV "
+            // We search for "avih" and replace it with "amvh"
+            
+            // Convert Uint8Array to normal array for easy editing if needed, 
+            // but we can modify directly.
+            
+            // Header usually starts at byte 0. 
+            // 'R','I','F','F', size, size, size, size, 'A','V','I',' ' (at index 8)
+            // Replace 'AVI ' (0x41 0x56 0x49 0x20) with 'AMV ' (0x41 0x4D 0x56 0x20)
+            if (data[8] === 0x41 && data[9] === 0x56 && data[10] === 0x49) {
+                data[9] = 0x4D; // Change V to M
+                data[10] = 0x56; // Change I to V
+                logEl.textContent += "> Patched Header: AVI -> AMV\n";
+            }
+
+            // Search for 'avih' and replace with 'amvh'
+            // This is usually around byte 32-64
+            for (let i = 0; i < 200; i++) {
+                // Look for 'a' 'v' 'i' 'h'
+                if (data[i] === 0x61 && data[i+1] === 0x76 && data[i+2] === 0x69 && data[i+3] === 0x68) {
+                    data[i+1] = 0x6D; // Change v to m
+                    data[i+2] = 0x76; // Change i to v
+                    logEl.textContent += "> Patched Header: avih -> amvh\n";
+                    break;
+                }
+            }
+
+            // STEP 4: Download as .amv
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
             const a = document.createElement('a');
             a.href = url;
             a.download = 'minimod_video.amv';
             a.click();
+            
+            status.innerText = "Done!";
 
         } catch (e) {
-            status.innerText = "Error - Check Logs";
+            status.innerText = "Error: " + e.message;
             console.error(e);
         } finally {
             btn.disabled = false;
