@@ -2,31 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimod AMV Converter</title>
+    <title>GitHub AMV Converter</title>
+    <script src="coi-serviceworker.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 600px; margin: 50px auto; text-align: center; background: #f4f4f9; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        #log { margin-top: 20px; font-size: 12px; color: #666; height: 100px; overflow-y: auto; text-align: left; background: #eee; padding: 10px; border-radius: 5px; }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; }
-        button:disabled { background: #ccc; }
-        input { margin-bottom: 20px; }
-        progress { width: 100%; height: 20px; margin-top: 10px; }
+        body { font-family: sans-serif; max-width: 500px; margin: 50px auto; text-align: center; background: #121212; color: white; }
+        .box { border: 2px dashed #333; padding: 40px; border-radius: 20px; background: #1e1e1e; }
+        button { background: #00ff88; color: black; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+        button:disabled { background: #444; color: #888; }
+        #log { font-family: monospace; font-size: 11px; background: black; color: #00ff00; padding: 10px; margin-top: 20px; height: 150px; overflow-y: auto; text-align: left; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>AMV Video Converter</h2>
-    <p>Convert MP4 to specific AMV format (320x240, 21fps)</p>
-    
+<div class="box">
+    <h2>MP4 to AMV</h2>
     <input type="file" id="uploader" accept="video/mp4">
     <br>
-    <button id="convertBtn">Convert to AMV</button>
-    
-    <div id="status">Status: Waiting for file...</div>
-    <progress id="progress" value="0" max="100" style="display:none;"></progress>
+    <button id="convertBtn">Start Conversion</button>
+    <div id="status">Ready</div>
     <div id="log"></div>
 </div>
 
@@ -34,45 +28,27 @@
     const { createFFmpeg, fetchFile } = FFmpeg;
     const ffmpeg = createFFmpeg({ log: true });
 
-    const convertBtn = document.getElementById('convertBtn');
-    const uploader = document.getElementById('uploader');
-    const status = document.getElementById('status');
-    const progress = document.getElementById('progress');
-    const logElement = document.getElementById('log');
+    const btn = document.getElementById('convertBtn');
+    const logEl = document.getElementById('log');
 
-    // Add logging to the UI
     ffmpeg.setLogger(({ message }) => {
-        const line = document.createElement('div');
-        line.textContent = message;
-        logElement.appendChild(line);
-        logElement.scrollTop = logElement.scrollHeight;
+        logEl.innerHTML += `<div>${message}</div>`;
+        logEl.scrollTop = logEl.scrollHeight;
     });
 
-    // Track progress
-    ffmpeg.setProgress(({ ratio }) => {
-        progress.value = ratio * 100;
-    });
+    btn.addEventListener('click', async () => {
+        const file = document.getElementById('uploader').files[0];
+        if (!file) return;
 
-    convertBtn.addEventListener('click', async () => {
-        const file = uploader.files[0];
-        if (!file) return alert('Please select a file first!');
+        btn.disabled = true;
+        document.getElementById('status').innerText = "Loading Core...";
 
-        convertBtn.disabled = true;
-        status.innerText = 'Loading FFmpeg core...';
-        progress.style.display = 'block';
+        if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-        if (!ffmpeg.isLoaded()) {
-            await ffmpeg.load();
-        }
-
-        status.innerText = 'Converting...';
-        const { name } = file;
-        
-        // Write file to FFmpeg virtual memory
+        document.getElementById('status').innerText = "Processing...";
         ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-        // Run the specific command provided
-        // Command: -i "minimod.mp4" -vf "hflip,scale=320:240" -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050 "1.amv"
+        // Using your specific command parameters
         await ffmpeg.run(
             '-i', 'input.mp4',
             '-vf', 'hflip,scale=320:240',
@@ -85,21 +61,17 @@
             'output.amv'
         );
 
-        status.innerText = 'Conversion Complete!';
-        
-        // Read the result
         const data = ffmpeg.FS('readFile', 'output.amv');
-
-        // Create a download link
         const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
+        
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'converted_video.amv';
+        a.download = 'minimod_video.amv';
         a.click();
 
-        convertBtn.disabled = false;
+        document.getElementById('status').innerText = "Done!";
+        btn.disabled = false;
     });
 </script>
-
 </body>
 </html>
