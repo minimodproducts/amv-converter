@@ -79,9 +79,9 @@
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly>Log Output:</textarea>
 </div>
-<div class="version-tag">NUCLEAR ENGINE V17.0 (SINGLE THREAD STABLE)</div>
+<div class="version-tag">NUCLEAR ENGINE V19.0 (NATIVE AMV)</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
@@ -102,12 +102,11 @@
 
     const initEngine = async () => {
         try {
-            log("System Check: Starting v0.10.1...");
+            log("Loading Engine...");
             
-            // Create the engine pointing to the Single Threaded core on CDN
             ffmpeg = createFFmpeg({ 
                 log: true,
-                corePath: "https://unpkg.com/@ffmpeg/core@0.10.1/dist/ffmpeg-core.js"
+                corePath: "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.10.1/dist/ffmpeg-core.js"
             });
             
             ffmpeg.setLogger(({ message }) => {
@@ -115,10 +114,9 @@
                 if(message.includes("frame=")) status.innerText = "Processing...";
             });
 
-            log("Downloading Core...");
             await ffmpeg.load();
 
-            log("Engine Loaded Successfully!");
+            log("Engine Ready.");
             status.innerText = "READY - DROP VIDEO";
             fileInfo.innerText = "DRAG VIDEO HERE";
             
@@ -128,8 +126,7 @@
 
         } catch (e) {
             status.innerText = "ENGINE FAILED";
-            log("CRITICAL ERROR: " + e.message);
-            console.error(e);
+            log("ERROR: " + e.message);
         }
     };
 
@@ -145,8 +142,7 @@
             status.innerText = "FILE LOADED";
         }
     });
-    
-    // Click to upload support
+
     dropArea.addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -172,39 +168,33 @@
             status.innerText = "READING FILE...";
             log("Reading input file...");
             
-            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(selectedFile));
+            // HERE IS THE MAGIC:
+            // We take "selectedFile" (what you dragged in)
+            // and save it as "minimod.mp4" (what the script expects)
+            ffmpeg.FS('writeFile', 'minimod.mp4', await fetchFile(selectedFile));
 
             status.innerText = "CONVERTING...";
-            log("Running FFmpeg conversion...");
+            log("Running Native AMV Encoder...");
 
-            // Exact commands from your working AppleScript
+            // YOUR EXACT COMMAND LINE:
+            // ./ffmpeg -i "minimod.mp4" -vf "hflip,scale=320:240" -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050 "output.amv"
             await ffmpeg.run(
-                '-i', 'input.mp4',
+                '-i', 'minimod.mp4',
                 '-vf', 'hflip,scale=320:240',
-                '-c:v', 'mjpeg',
-                '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',
-                '-c:a', 'adpcm_ima_wav',
+                '-c:v', 'amv',
+                '-c:a', 'adpcm_ima_amv',
+                '-r', '21',
                 '-ac', '1',
                 '-ar', '22050',
-                '-r', '21',
-                '-f', 'avi',
-                'output.avi'
+                '-block_size', '1050',
+                'output.amv'
             );
 
-            log("Conversion done. Patching header...");
-            status.innerText = "PATCHING HEADER...";
+            log("Conversion done. Generating download...");
             
-            let data = ffmpeg.FS('readFile', 'output.avi');
+            let data = ffmpeg.FS('readFile', 'output.amv');
             
-            // Header Hack: AVI -> AMI
-            if (data[8] === 65 && data[9] === 86 && data[10] === 73) { 
-                 data[9] = 77; 
-                 log("Header patched: AVI -> AMI");
-            }
-
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
+            const blob = new Blob([data.buffer], { type: 'video/x-amv' });
             const name = selectedFile.name.split('.')[0] + "_minimod.amv";
             
             link.href = URL.createObjectURL(blob);
@@ -213,7 +203,7 @@
             link.style.display = "block";
             
             status.innerText = "DONE!";
-            log("Process Complete.");
+            log("Success.");
             btn.style.display = "none";
 
         } catch (e) {
