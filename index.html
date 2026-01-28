@@ -28,65 +28,68 @@
     <div id="log">Logs:</div>
 </div>
 
-<script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-    });
+const { createFFmpeg, fetchFile } = FFmpeg;
+const ffmpeg = createFFmpeg({ 
+    log: true,
+    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+});
 
-    const btn = document.getElementById('convertBtn');
-    const logEl = document.getElementById('log');
-    const statusEl = document.getElementById('status');
+const btn = document.getElementById('convertBtn');
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
 
-    ffmpeg.setLogger(({ message }) => {
-        logEl.textContent += "> " + message + "\n";
-        logEl.scrollTop = logEl.scrollHeight;
-    });
+// NEW: This tells us immediately if the COI script is working
+if (!window.crossOriginIsolated) {
+    statusEl.innerHTML = "<span style='color:red'>⚠️ Security Headers Missing! Press Ctrl+F5</span>";
+} else {
+    statusEl.innerHTML = "<span style='color:green'>✅ System Ready</span>";
+}
 
-    btn.addEventListener('click', async () => {
-        const file = document.getElementById('uploader').files[0];
-        if (!file) return alert("Please select a file.");
+ffmpeg.setLogger(({ message }) => {
+    logEl.textContent += "> " + message + "\n";
+    logEl.scrollTop = logEl.scrollHeight;
+});
 
-        btn.disabled = true;
-        logEl.textContent = "Starting...\n";
-        statusEl.innerText = "Loading Engine...";
+btn.addEventListener('click', async () => {
+    if (!window.crossOriginIsolated) {
+        alert("The security worker is not active yet. Please refresh the page (Ctrl+F5).");
+        return;
+    }
 
-        try {
-            if (!ffmpeg.isLoaded()) await ffmpeg.load();
+    const file = document.getElementById('uploader').files[0];
+    if (!file) return alert("Please select a file.");
 
-            statusEl.innerText = "Processing Video...";
-            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+    btn.disabled = true;
+    try {
+        if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-            // THE FIXED COMMAND
-            await ffmpeg.run(
-                '-i', 'input.mp4',
-                '-vf', 'hflip,scale=320:240',
-                '-c:v', 'amv',
-                '-r', '21',
-                '-c:a', 'adpcm_ima_amv',
-                '-ac', '1',
-                '-ar', '22050',
-                '-f', 'amv', 
-                'output.amv'
-            );
+        statusEl.innerText = "Processing...";
+        ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            statusEl.innerText = "Downloading...";
-            const data = ffmpeg.FS('readFile', 'output.amv');
-            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '1.amv';
-            a.click();
-            statusEl.innerText = "Done!";
+        await ffmpeg.run(
+            '-i', 'input.mp4',
+            '-vf', 'hflip,scale=320:240',
+            '-c:v', 'amv',
+            '-r', '21',
+            '-c:a', 'adpcm_ima_amv',
+            '-ac', '1',
+            '-ar', '22050',
+            '-f', 'amv', 
+            'output.amv'
+        );
 
-        } catch (e) {
-            statusEl.innerText = "Error - See logs";
-            logEl.textContent += "ERROR: " + e.message + "\n";
-        } finally {
-            btn.disabled = false;
-        }
-    });
-</script>
+        const data = ffmpeg.FS('readFile', 'output.amv');
+        const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '1.amv';
+        a.click();
+        statusEl.innerText = "Success!";
+    } catch (e) {
+        statusEl.innerText = "Error: " + e.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
 </body>
 </html>
