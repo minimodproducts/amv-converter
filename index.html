@@ -39,13 +39,18 @@
     <a id="downloadLink">Download File</a>
 </div>
 
-<div class="version-tag">BUILD V12.0 - EXACT MATCH (21.68 FPS)</div>
+<div class="version-tag">BUILD V13.0 - RAW AUDIO (PCM)</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: true });
+    
+    // Single Threaded Core (No Crashes)
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
     
     const uploader = document.getElementById('uploader');
     const status = document.getElementById('status');
@@ -71,18 +76,18 @@
             
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            status.innerText = "PROCESSING (FPS 21.68)...";
+            status.innerText = "PROCESSING (RAW AUDIO)...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
-                '-r', '21.68',               // <--- EXACT FPS MATCH
+                '-r', '21.68',               // Matches your sample
                 '-c:v', 'mjpeg',
                 '-q:v', '3',
                 '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',      // <--- REQUIRED HEADER FIX
-                '-c:a', 'adpcm_ima_wav',     // <--- REQUIRED AUDIO FORMAT
+                '-bsf:v', 'mjpeg2jpeg',      // Required for Video
+                '-c:a', 'pcm_s16le',         // <--- CHANGED: Uncompressed Audio (Safest)
                 '-ac', '1',
                 '-ar', '22050',
                 '-map_metadata', '-1',
