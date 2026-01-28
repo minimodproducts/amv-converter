@@ -2,112 +2,167 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Minimod AMV Tool (Single Thread)</title>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
+    <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
+    
+    <script src="coi-serviceworker.js"></script>
+
     <style>
-        body { font-family: sans-serif; background: #222; color: #fff; text-align: center; padding: 20px; }
-        .box { background: #333; max-width: 500px; margin: auto; padding: 20px; border-radius: 10px; border: 1px solid #444; }
-        #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; height: 150px; overflow-y: auto; text-align: left; margin-top: 15px; }
-        button { background: #00ff88; color: #000; border: none; padding: 15px; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
-        button:disabled { background: #555; color: #888; cursor: wait; }
+        :root {
+            --bg-color: #000000;
+            --card-bg: #111111;
+            --inner-bg: #1a1a1a;
+            --text-color: #ffffff;
+            --accent: #53c0c5;
+            --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
+        }
+        
+        body { 
+            background-color: var(--bg-color); color: var(--text-color);
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0;
+        }
+
+        .card { 
+            width: 90%; max-width: 500px; padding: 40px; 
+            background: var(--card-bg); border-radius: 24px; text-align: center; 
+            border: 1px solid #222;
+        }
+
+        .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; }
+
+        .drop-zone {
+            background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px;
+            height: 160px; margin-bottom: 20px; position: relative; 
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: 0.2s;
+        }
+        .drop-zone:hover { border-color: #555; background: #222; }
+        
+        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        .drop-label { color: var(--accent); font-weight: 700; pointer-events: none; }
+
+        #convertBtn { 
+            width: 100%; padding: 20px; background: var(--gradient); border: none; 
+            border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer;
+        }
+        #convertBtn:disabled { filter: grayscale(1); opacity: 0.5; cursor: not-allowed; }
+
+        #status { margin-top: 20px; font-weight: bold; color: var(--accent); min-height: 20px; }
+        
+        #downloadLink { 
+            display: none; margin-top: 20px; padding: 20px; background: #fff; color: #000; 
+            text-decoration: none; border-radius: 12px; font-weight: 900;
+        }
+        
+        #debugLog {
+            display: none; width: 100%; height: 100px; margin-top: 20px;
+            background: #000; border: 1px solid #333; color: #f55; 
+            font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
+        }
     </style>
 </head>
 <body>
 
-<div class="box">
-    <h2>Minimod AMV Converter</h2>
-    <input type="file" id="uploader" accept="video/mp4" style="margin: 20px 0;">
-    <button id="convertBtn">Convert Video</button>
-    <div id="status" style="margin-top:10px; color: #aaa;">Status: Ready</div>
-    <div id="log">Logs:</div>
+<div class="card">
+    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" class="logo-img">
+    
+    <div class="drop-zone" id="dropArea">
+        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE</div>
+        <input type="file" id="uploader" accept="video/*">
+    </div>
+
+    <button id="convertBtn">CONVERT VIDEO</button>
+    <div id="status">READY</div>
+    <a id="downloadLink">DOWNLOAD</a>
+    <textarea id="debugLog" readonly></textarea>
 </div>
 
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+    
+    const uploader = document.getElementById('uploader');
+    const status = document.getElementById('status');
+    const btn = document.getElementById('convertBtn');
+    const link = document.getElementById('downloadLink');
+    const debug = document.getElementById('debugLog');
+    
+    let file = null;
 
-    // KEY FIX: We point to 'core-st' (Single Threaded)
-    // This bypasses the "SharedArrayBuffer" requirement entirely.
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    uploader.addEventListener('change', () => {
+        if(uploader.files.length){
+            file = uploader.files[0];
+            document.getElementById('fileInfo').innerText = file.name;
+        }
     });
 
-    const btn = document.getElementById('convertBtn');
-    const status = document.getElementById('status');
-    const logEl = document.getElementById('log');
-
     ffmpeg.setLogger(({ message }) => {
-        logEl.textContent += "> " + message + "\n";
-        logEl.scrollTop = logEl.scrollHeight;
+        // Only show debug log if it contains "Error"
+        if(message.toLowerCase().includes("error")) {
+            debug.style.display = 'block';
+            debug.value += message + "\n";
+        }
     });
 
     btn.addEventListener('click', async () => {
-        const file = document.getElementById('uploader').files[0];
-        if (!file) return alert("Select a file first");
-
-        btn.disabled = true;
-        status.innerText = "Loading Engine (Single Thread)...";
-
+        if(!file) return alert("Please select a file");
+        
         try {
-            // Load the engine
-            if (!ffmpeg.isLoaded()) await ffmpeg.load();
-
-            status.innerText = "Converting... (This is slower, be patient)";
+            btn.disabled = true;
+            status.innerText = "LOADING...";
+            
+            if(!ffmpeg.isLoaded()) await ffmpeg.load();
+            
+            status.innerText = "READING...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // STEP 1: Convert to AVI
-            // We use MJPEG and ADPCM which are the internal codecs for AMV
+            status.innerText = "CONVERTING...";
+            
+            // --- THE GOLDEN COMMAND ---
+            // 1. VISUALS: Taken from PC Script (crop 4:3, flip, scale 320x240)
+            // 2. CODEC: Taken from Mac Script (mjpeg, mjpeg2jpeg filter)
+            // 3. AUDIO: Taken from Mac Script (adpcm_ima_wav 22050hz mono)
+            // 4. SPEED: Taken from PC Script (21 fps)
+            
             await ffmpeg.run(
                 '-i', 'input.mp4',
-                '-vf', 'hflip,scale=320:240',
-                '-r', '21',
-                '-ac', '1',
+                '-vf', 'crop=ih*4/3:ih,hflip,scale=320:240', 
+                '-c:v', 'mjpeg', 
+                '-q:v', '3', 
+                '-vtag', 'MJPG', 
+                '-bsf:v', 'mjpeg2jpeg',
+                '-c:a', 'adpcm_ima_wav', 
+                '-ac', '1', 
                 '-ar', '22050',
-                '-c:v', 'mjpeg',
-                '-q:v', '3',
-                '-c:a', 'adpcm_ima_wav',
-                '-f', 'avi',
-                'temp.avi'
+                '-r', '21',
+                '-f', 'avi', 
+                'output.avi'
             );
 
-            status.innerText = "Patching header to AMV...";
+            const data = ffmpeg.FS('readFile', 'output.avi');
             
-            // STEP 2: Header Patching (AVI -> AMV)
-            // This tricks the hardware into accepting the standard AVI file
-            let data = ffmpeg.FS('readFile', 'temp.avi');
+            // Generate filename with .amv extension (Standard AVI structure inside)
+            const name = file.name.split('.')[0] + "_minimod.amv";
+            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             
-            // Replace 'AVI ' with 'AMV ' at the beginning
-            if (data[8] === 0x41 && data[9] === 0x56 && data[10] === 0x49) {
-                data[9] = 0x4D; // V -> M
-                data[10] = 0x56; // I -> V
-            }
+            link.href = URL.createObjectURL(blob);
+            link.download = name;
+            link.innerText = "DOWNLOAD " + name;
+            link.style.display = "block";
+            status.innerText = "DONE!";
+            btn.style.display = "none";
 
-            // Replace 'avih' with 'amvh' inside the file
-            for (let i = 0; i < 500; i++) {
-                if (data[i] === 0x61 && data[i+1] === 0x76 && data[i+2] === 0x69 && data[i+3] === 0x68) {
-                    data[i+1] = 0x6D; // v -> m
-                    data[i+2] = 0x76; // i -> v
-                    break;
-                }
-            }
-
-            // STEP 3: Download
-            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'minimod_video.amv';
-            a.click();
-            
-            status.innerText = "Done! Check your downloads.";
-
-        } catch (e) {
-            status.innerText = "Error: " + e.message;
-            console.error(e);
-        } finally {
+        } catch(e) {
+            status.innerText = "ERROR";
+            debug.style.display = 'block';
+            debug.value += "\nCRITICAL JS ERROR: " + e.message;
             btn.disabled = false;
         }
     });
 </script>
-
 </body>
 </html>
