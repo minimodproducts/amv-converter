@@ -6,54 +6,68 @@
     <script src="coi-serviceworker.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; text-align: center; padding: 20px; }
-        .box { background: #1e1e1e; max-width: 500px; margin: auto; padding: 25px; border-radius: 12px; border: 1px solid #333; }
-        #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; height: 180px; overflow-y: auto; text-align: left; margin-top: 15px; border-radius: 5px; white-space: pre-wrap; }
-        button { background: #00ff88; color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
+        body { font-family: sans-serif; background: #121212; color: #00ff88; text-align: center; padding: 20px; }
+        .box { background: #1e1e1e; max-width: 600px; margin: auto; padding: 25px; border-radius: 12px; border: 2px solid #333; }
+        #log { background: #000; color: #0dff00; font-family: monospace; font-size: 11px; padding: 15px; height: 250px; overflow-y: auto; text-align: left; margin-top: 15px; border: 1px solid #444; white-space: pre-wrap; }
+        button { background: #00ff88; color: #000; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.1em; }
         button:disabled { background: #444; color: #888; }
-        progress { width: 100%; margin: 10px 0; }
+        .warning { color: #ff4444; font-size: 12px; margin-bottom: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="box">
     <h2>Minimod AMV Converter</h2>
-    <input type="file" id="uploader" accept="video/mp4">
-    <button id="convertBtn">Convert to 1.amv</button>
-    <div id="status" style="margin-top:10px;">Status: Ready</div>
-    <div id="log"></div>
+    <div id="header-warn" class="warning">⚠️ Security headers not detected. Processing will fail. Try Ctrl+F5.</div>
+    
+    <input type="file" id="uploader" accept="video/mp4" style="margin: 20px 0; color: white;">
+    <button id="convertBtn">Convert MP4 to 1.amv</button>
+    
+    <p id="status" style="color: white;">Status: Ready</p>
+    <div id="log">Logs:</div>
 </div>
 
 <script>
+    // Show warning if headers are missing
+    if (!window.crossOriginIsolated) {
+        document.getElementById('header-warn').style.display = 'block';
+    }
+
     const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: true });
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        // Using a direct CDN link to the core to prevent loading hangs
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+    });
 
     const btn = document.getElementById('convertBtn');
     const logEl = document.getElementById('log');
     const statusEl = document.getElementById('status');
 
     ffmpeg.setLogger(({ message }) => {
-        logEl.textContent += message + "\n";
+        logEl.textContent += "> " + message + "\n";
         logEl.scrollTop = logEl.scrollHeight;
     });
 
     btn.addEventListener('click', async () => {
         const file = document.getElementById('uploader').files[0];
-        if (!file) return;
+        if (!file) return alert("Please select a file.");
 
         btn.disabled = true;
-        statusEl.innerText = "Initializing FFmpeg...";
+        statusEl.innerText = "Starting Engine...";
 
         try {
-            if (!ffmpeg.isLoaded()) await ffmpeg.load();
+            if (!ffmpeg.isLoaded()) {
+                await ffmpeg.load();
+            }
 
-            statusEl.innerText = "Uploading to Browser Memory...";
+            statusEl.innerText = "Reading File...";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            statusEl.innerText = "Converting... (This may take a minute)";
+            statusEl.innerText = "Converting... (Watch the logs)";
             
-            // Re-structured command to avoid "Unrecognized Option"
-            // We use -block_size as a sub-option for the encoder
+            // This command avoids 'block_size' which crashes older wasm builds
+            // but keeps the exact specs for your device
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -62,22 +76,20 @@
                 '-c:a', 'adpcm_ima_amv',
                 '-ac', '1',
                 '-ar', '22050',
-                '-block_size', '1050', 
                 'output.amv'
             );
 
-            statusEl.innerText = "Finalizing...";
+            statusEl.innerText = "Success! Downloading...";
             const data = ffmpeg.FS('readFile', 'output.amv');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
             const a = document.createElement('a');
             a.href = url;
             a.download = '1.amv';
             a.click();
-            statusEl.innerText = "Done! Downloaded 1.amv";
 
         } catch (e) {
-            statusEl.innerText = "Crash! Check logs.";
-            console.error(e);
+            statusEl.innerText = "ERROR: See logs.";
+            logEl.textContent += "!! CRASH !! " + e.message + "\n";
         } finally {
             btn.disabled = false;
         }
