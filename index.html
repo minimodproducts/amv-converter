@@ -79,9 +79,9 @@
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly>Log Output:</textarea>
 </div>
-<div class="version-tag">NUCLEAR ENGINE V20.0 (BLOB PATCH)</div>
+<div class="version-tag">NUCLEAR ENGINE V21.0 (LOCAL HOSTED)</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
+<script src="ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
@@ -100,42 +100,22 @@
         debug.scrollTop = debug.scrollHeight;
     };
 
-    // --- BLOB LOADER (THE FIX) ---
-    // This function downloads the engine code and modifies it to work from memory
-    // avoiding the "Cross-Origin Worker" error.
-    const loadEngineFromBlob = async () => {
+    const initEngine = async () => {
         try {
-            log("1. Fetching Engine Code...");
-            const baseURL = "https://unpkg.com/@ffmpeg/core@0.10.1/dist";
+            log("System Check: Looking for local files...");
             
-            // Fetch the JS code as text
-            const response = await fetch(`${baseURL}/ffmpeg-core.js`);
-            let scriptText = await response.text();
-            
-            log("2. Patching Engine Paths...");
-            // CRITICAL FIX: The code tries to look for 'ffmpeg-core.wasm' in the same folder.
-            // Since we are running from a Blob, "same folder" doesn't exist.
-            // We hardcode the full URL of the WASM file into the script.
-            scriptText = scriptText.replace(
-                /ffmpeg-core\.wasm/g, 
-                `${baseURL}/ffmpeg-core.wasm`
-            );
-
-            // Create a Blob (Fake Local File)
-            const blob = new Blob([scriptText], { type: 'application/javascript' });
-            const blobURL = URL.createObjectURL(blob);
-            
-            log("3. Starting Engine from Blob...");
+            // Point to the files you just uploaded
             ffmpeg = createFFmpeg({ 
                 log: true,
-                corePath: blobURL // Load from the patched memory file
+                corePath: "ffmpeg-core.js" 
             });
-
+            
             ffmpeg.setLogger(({ message }) => {
                 console.log(message);
                 if(message.includes("frame=")) status.innerText = "Processing...";
             });
 
+            log("Loading Engine...");
             await ffmpeg.load();
 
             log("ENGINE READY!");
@@ -147,8 +127,10 @@
             btn.innerText = "CONVERT VIDEO";
 
         } catch (e) {
-            status.innerText = "BOOT ERROR";
-            log("CRITICAL FAILURE: " + e.message);
+            status.innerText = "FILE MISSING";
+            log("ERROR: Could not find 'ffmpeg-core.js' or 'ffmpeg-core.wasm'");
+            log("Did you upload them to the main folder?");
+            log("Details: " + e.message);
         }
     };
 
@@ -195,9 +177,7 @@
             status.innerText = "CONVERTING...";
             log("Running Native AMV Encoder...");
 
-            // NATIVE AMV COMMAND
-            // Note: If this fails with "Encoder not found", it means the Web Version of FFmpeg
-            // removed AMV support to save size. We will know in 10 seconds.
+            // YOUR PROVEN COMMAND
             await ffmpeg.run(
                 '-i', 'minimod.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -229,13 +209,12 @@
         } catch (e) {
             status.innerText = "ERROR";
             log("Conversion Error: " + e.message);
-            log("Note: If error says 'Unknown encoder', the web engine is missing AMV support.");
             btn.disabled = false;
             btn.innerText = "TRY AGAIN";
         }
     });
 
-    loadEngineFromBlob();
+    initEngine();
 </script>
 </body>
 </html>
