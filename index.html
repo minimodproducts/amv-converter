@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Video Converter</title>
-    <script src="coi-serviceworker.js"></script>
+    <title>AMV Video Converter (Compat Mode)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         .container { text-align: center; width: 90%; max-width: 600px; }
@@ -23,24 +22,24 @@
 
 <div class="container">
     <h1>AMV Converter</h1>
-    <p>Drag & Drop your video here to convert it for the custom player.</p>
+    <p>Drag & Drop your video here.</p>
 
     <div class="drop-zone" id="drop_zone">
-        <span id="status_text">Drop video file here</span>
+        <span id="status_text">Loading engine...</span>
     </div>
 
-    <div class="loader" id="loader">Processing... (This may take a moment)</div>
+    <div class="loader" id="loader">Processing... (Do not close tab)</div>
     <div id="log"></div>
-    <button id="download_btn">Download Converted Video</button>
+    <button id="download_btn">Download AMV</button>
 </div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js"></script>
-<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.8/dist/ffmpeg.min.js"></script>
 
 <script>
-    const { FFmpeg } = FFmpegWASM;
-    const { fetchFile } = FFmpegUtil;
-    let ffmpeg = null;
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    
+    // Initialize the legacy engine
+    const ffmpeg = createFFmpeg({ log: true });
 
     const dropZone = document.getElementById('drop_zone');
     const statusText = document.getElementById('status_text');
@@ -48,29 +47,16 @@
     const downloadBtn = document.getElementById('download_btn');
     const loader = document.getElementById('loader');
 
-    // Initialize FFmpeg
     async function loadFFmpeg() {
-        if (ffmpeg) return;
-        statusText.innerText = "Loading conversion engine...";
-        ffmpeg = new FFmpeg();
-        
-        ffmpeg.on('log', ({ message }) => {
-            logBox.style.display = 'block';
-            logBox.innerHTML += `> ${message}<br>`;
-            logBox.scrollTop = logBox.scrollHeight;
-            console.log(message);
-        });
-
-        // Load core from CDN
-        await ffmpeg.load({
-            coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
-            wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
-        });
-        
-        statusText.innerText = "Ready. Drop video file here.";
+        try {
+            await ffmpeg.load();
+            statusText.innerText = "Ready. Drop video file here.";
+        } catch (e) {
+            statusText.innerText = "Error loading engine. Check console.";
+            console.error(e);
+        }
     }
 
-    // Handle Drag & Drop
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', async (e) => {
@@ -88,21 +74,18 @@
     });
 
     async function processFile(file) {
-        if (!ffmpeg) await loadFFmpeg();
+        if (!ffmpeg.isLoaded()) await loadFFmpeg();
         
         downloadBtn.style.display = 'none';
         loader.style.display = 'block';
         statusText.innerText = `Converting: ${file.name}`;
         
         try {
-            // Write file to memory
-            await ffmpeg.writeFile('input', await fetchFile(file));
+            // 1. Write File to Memory
+            ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            // EXACT arguments from your CONVERT.bat
-            // -vf "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip"
-            // -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050
-            
-            const args = [
+            [cite_start]// 2. Run the EXACT command from your BAT file [cite: 1]
+            await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
                 '-c:v', 'amv',
@@ -112,14 +95,12 @@
                 '-ar', '22050',
                 '-block_size', '1050',
                 'output.amv'
-            ];
+            );
 
-            await ffmpeg.exec(args);
-
-            // Read output
-            const data = await ffmpeg.readFile('output.amv');
+            // 3. Read Output
+            const data = ffmpeg.FS('readFile', 'output.amv');
             
-            // Create download link
+            // 4. Create Download
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/amv' }));
             downloadBtn.onclick = () => {
                 const a = document.createElement('a');
@@ -131,14 +112,13 @@
             downloadBtn.style.display = 'inline-block';
             statusText.innerText = "Conversion Complete!";
         } catch (error) {
-            statusText.innerText = "Error during conversion. Check logs.";
+            statusText.innerText = "Error during conversion.";
             console.error(error);
         } finally {
             loader.style.display = 'none';
         }
     }
 
-    // Start loading immediately
     loadFFmpeg();
 </script>
 </body>
