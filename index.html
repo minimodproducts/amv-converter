@@ -79,7 +79,7 @@
     <a id="downloadLink">DOWNLOAD</a>
     <textarea id="debugLog" readonly>Log Output:</textarea>
 </div>
-<div class="version-tag">NUCLEAR ENGINE V21.0 (LOCAL HOSTED)</div>
+<div class="version-tag">NUCLEAR ENGINE V22.0 (NATIVE LOCAL)</div>
 
 <script src="ffmpeg.min.js"></script>
 
@@ -103,8 +103,6 @@
     const initEngine = async () => {
         try {
             log("System Check: Looking for local files...");
-            
-            // Point to the files you just uploaded
             ffmpeg = createFFmpeg({ 
                 log: true,
                 corePath: "ffmpeg-core.js" 
@@ -121,20 +119,18 @@
             log("ENGINE READY!");
             status.innerText = "READY - DROP VIDEO";
             fileInfo.innerText = "DRAG VIDEO HERE";
-            
             btn.disabled = false;
             btn.classList.add('ready');
             btn.innerText = "CONVERT VIDEO";
 
         } catch (e) {
             status.innerText = "FILE MISSING";
-            log("ERROR: Could not find 'ffmpeg-core.js' or 'ffmpeg-core.wasm'");
-            log("Did you upload them to the main folder?");
+            log("ERROR: Could not find 'ffmpeg-core.js'");
+            log("Did you upload the 3 files to GitHub?");
             log("Details: " + e.message);
         }
     };
 
-    // --- DRAG AND DROP ---
     dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
     dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
     dropArea.addEventListener('drop', (e) => {
@@ -161,7 +157,6 @@
         input.click();
     });
 
-    // --- CONVERSION ---
     btn.addEventListener('click', async () => {
         if (!selectedFile) return alert("Please drag a video first!");
         if (!ffmpeg || !ffmpeg.isLoaded()) return alert("Engine not ready.");
@@ -177,7 +172,6 @@
             status.innerText = "CONVERTING...";
             log("Running Native AMV Encoder...");
 
-            // YOUR PROVEN COMMAND
             await ffmpeg.run(
                 '-i', 'minimod.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -191,7 +185,6 @@
             );
 
             log("Conversion done. Generating download...");
-            
             let data = ffmpeg.FS('readFile', 'output.amv');
             
             const blob = new Blob([data.buffer], { type: 'video/x-amv' });
