@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Video Converter (Compat Mode)</title>
+    <title>AMV Video Converter (Fixed)</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         .container { text-align: center; width: 90%; max-width: 600px; }
@@ -16,6 +16,7 @@
         button { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 20px; display: none; }
         button:hover { background: #e5940e; }
         .loader { display: none; margin-top: 20px; color: #fca311; }
+        .error { color: #ff4444; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -27,22 +28,27 @@
     <div class="drop-zone" id="drop_zone">
         <span id="status_text">Loading engine...</span>
     </div>
+    <div id="error_msg" class="error"></div>
 
     <div class="loader" id="loader">Processing... (Do not close tab)</div>
     <div id="log"></div>
     <button id="download_btn">Download AMV</button>
 </div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.9.8/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // Initialize the legacy engine
-    const ffmpeg = createFFmpeg({ log: true });
+    // Explicitly set the corePath to ensure it is found
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js'
+    });
 
     const dropZone = document.getElementById('drop_zone');
     const statusText = document.getElementById('status_text');
+    const errorMsg = document.getElementById('error_msg');
     const logBox = document.getElementById('log');
     const downloadBtn = document.getElementById('download_btn');
     const loader = document.getElementById('loader');
@@ -51,8 +57,11 @@
         try {
             await ffmpeg.load();
             statusText.innerText = "Ready. Drop video file here.";
+            errorMsg.innerText = "";
         } catch (e) {
-            statusText.innerText = "Error loading engine. Check console.";
+            statusText.innerText = "Engine Failed.";
+            // Print the actual error to the screen so we can see it
+            errorMsg.innerText = "Error: " + e.message;
             console.error(e);
         }
     }
@@ -81,10 +90,9 @@
         statusText.innerText = `Converting: ${file.name}`;
         
         try {
-            // 1. Write File to Memory
             ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            [cite_start]// 2. Run the EXACT command from your BAT file [cite: 1]
+            [cite_start]// EXACT arguments from your CONVERT.bat [cite: 1]
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
@@ -97,10 +105,8 @@
                 'output.amv'
             );
 
-            // 3. Read Output
             const data = ffmpeg.FS('readFile', 'output.amv');
             
-            // 4. Create Download
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/amv' }));
             downloadBtn.onclick = () => {
                 const a = document.createElement('a');
@@ -113,6 +119,7 @@
             statusText.innerText = "Conversion Complete!";
         } catch (error) {
             statusText.innerText = "Error during conversion.";
+            errorMsg.innerText = error.message;
             console.error(error);
         } finally {
             loader.style.display = 'none';
