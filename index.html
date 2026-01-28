@@ -4,210 +4,56 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
-    
     <style>
-        :root {
-            --bg-color: #000000;
-            --card-bg: #111111;
-            --inner-bg: #1a1a1a;
-            --text-color: #ffffff;
-            --accent: #53c0c5;
-            --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
-        }
-        
-        body { 
-            background-color: var(--bg-color); color: var(--text-color);
-            font-family: system-ui, -apple-system, sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; margin: 0;
-        }
-
-        .card { 
-            width: 90%; max-width: 500px; padding: 40px; 
-            background: var(--card-bg); border-radius: 24px; text-align: center; 
-            border: 1px solid #222; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-
+        :root { --bg-color: #000000; --card-bg: #111111; --inner-bg: #1a1a1a; --text-color: #ffffff; --accent: #53c0c5; --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%); }
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { width: 90%; max-width: 500px; padding: 40px; background: var(--card-bg); border-radius: 24px; text-align: center; border: 1px solid #222; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
         .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; pointer-events: none; }
-
-        .drop-zone {
-            background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px;
-            height: 160px; margin-bottom: 20px; position: relative; 
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.2s;
-        }
+        .drop-zone { background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px; height: 160px; margin-bottom: 20px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
         .drop-zone:hover { border-color: #555; background: #222; }
         .drop-zone.dragover { background: #003300; border-color: #0f0; }
-        
         #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
         .drop-label { color: var(--accent); font-weight: 700; pointer-events: none; }
-
-        #convertBtn { 
-            width: 100%; padding: 20px; background: var(--gradient); border: none; 
-            border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer;
-            opacity: 0.5; cursor: not-allowed;
-        }
+        #convertBtn { width: 100%; padding: 20px; background: var(--gradient); border: none; border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer; opacity: 0.5; cursor: not-allowed; }
         #convertBtn.ready { opacity: 1; cursor: pointer; }
-
         #status { margin-top: 20px; font-weight: bold; color: var(--accent); min-height: 20px; white-space: pre-wrap;}
-        
-        #downloadLink { 
-            display: none; margin-top: 20px; padding: 20px; background: #fff; color: #000; 
-            text-decoration: none; border-radius: 12px; font-weight: 900;
-        }
-        
-        #debugLog {
-            display: block; width: 100%; height: 100px; margin-top: 20px;
-            background: #000; border: 1px solid #333; color: #f55; 
-            font-family: monospace; font-size: 10px; text-align: left; padding: 10px;
-        }
-        
+        #downloadLink { display: none; margin-top: 20px; padding: 20px; background: #fff; color: #000; text-decoration: none; border-radius: 12px; font-weight: 900; }
+        #debugLog { display: block; width: 100%; height: 100px; margin-top: 20px; background: #000; border: 1px solid #333; color: #f55; font-family: monospace; font-size: 10px; text-align: left; padding: 10px; }
         .version-tag { margin-top: 15px; font-size: 10px; color: #444; }
     </style>
+    
+    <script>
+        (function() {
+            if (window.crossOriginIsolated) return; // If already fixed, stop.
+            const script = document.createElement('script');
+            const code = `
+                const handler = {
+                    install: (e) => e.waitUntil(self.skipWaiting()),
+                    activate: (e) => e.waitUntil(self.clients.claim()),
+                    fetch: (e) => {
+                        if (e.request.mode === 'navigate') {
+                            e.respondWith(fetch(e.request).then((resp) => {
+                                const headers = new Headers(resp.headers);
+                                headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+                                headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+                                return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
+                            }));
+                        } else {
+                            e.respondWith(fetch(e.request));
+                        }
+                    }
+                };
+                self.addEventListener('install', handler.install);
+                self.addEventListener('activate', handler.activate);
+                self.addEventListener('fetch', handler.fetch);
+            `;
+            const blob = new Blob([code], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            navigator.serviceWorker.register(url).then(() => window.location.reload());
+        })();
+    </script>
 </head>
 <body>
 
 <div class="card">
-    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" class="logo-img">
-    
-    <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" class="drop-label">LOADING ENGINE...</div>
-    </div>
-
-    <button id="convertBtn" disabled>WAITING FOR ENGINE...</button>
-    <div id="status">INITIALIZING...</div>
-    <a id="downloadLink">DOWNLOAD</a>
-    <textarea id="debugLog" readonly>Log Output:</textarea>
-</div>
-<div class="version-tag">NUCLEAR ENGINE V22.0 (NATIVE LOCAL)</div>
-
-<script src="ffmpeg.min.js"></script>
-
-<script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    let ffmpeg = null;
-    let selectedFile = null;
-
-    const btn = document.getElementById('convertBtn');
-    const status = document.getElementById('status');
-    const link = document.getElementById('downloadLink');
-    const debug = document.getElementById('debugLog');
-    const dropArea = document.getElementById('dropArea');
-    const fileInfo = document.getElementById('fileInfo');
-
-    const log = (msg) => {
-        debug.value += `\n${msg}`;
-        debug.scrollTop = debug.scrollHeight;
-    };
-
-    const initEngine = async () => {
-        try {
-            log("System Check: Looking for local files...");
-            ffmpeg = createFFmpeg({ 
-                log: true,
-                corePath: "ffmpeg-core.js" 
-            });
-            
-            ffmpeg.setLogger(({ message }) => {
-                console.log(message);
-                if(message.includes("frame=")) status.innerText = "Processing...";
-            });
-
-            log("Loading Engine...");
-            await ffmpeg.load();
-
-            log("ENGINE READY!");
-            status.innerText = "READY - DROP VIDEO";
-            fileInfo.innerText = "DRAG VIDEO HERE";
-            btn.disabled = false;
-            btn.classList.add('ready');
-            btn.innerText = "CONVERT VIDEO";
-
-        } catch (e) {
-            status.innerText = "FILE MISSING";
-            log("ERROR: Could not find 'ffmpeg-core.js'");
-            log("Did you upload the 3 files to GitHub?");
-            log("Details: " + e.message);
-        }
-    };
-
-    dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
-    dropArea.addEventListener('dragleave', () => { dropArea.classList.remove('dragover'); });
-    dropArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropArea.classList.remove('dragover');
-        if (e.dataTransfer.files.length) {
-            selectedFile = e.dataTransfer.files[0];
-            fileInfo.innerText = selectedFile.name.toUpperCase();
-            status.innerText = "FILE LOADED";
-        }
-    });
-
-    dropArea.addEventListener('click', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'video/*';
-        input.onchange = (e) => {
-            if (e.target.files.length) {
-                selectedFile = e.target.files[0];
-                fileInfo.innerText = selectedFile.name.toUpperCase();
-                status.innerText = "FILE LOADED";
-            }
-        };
-        input.click();
-    });
-
-    btn.addEventListener('click', async () => {
-        if (!selectedFile) return alert("Please drag a video first!");
-        if (!ffmpeg || !ffmpeg.isLoaded()) return alert("Engine not ready.");
-
-        try {
-            btn.disabled = true;
-            btn.innerText = "WORKING...";
-            status.innerText = "READING FILE...";
-            log("Reading input file...");
-            
-            ffmpeg.FS('writeFile', 'minimod.mp4', await fetchFile(selectedFile));
-
-            status.innerText = "CONVERTING...";
-            log("Running Native AMV Encoder...");
-
-            await ffmpeg.run(
-                '-i', 'minimod.mp4',
-                '-vf', 'hflip,scale=320:240',
-                '-c:v', 'amv',
-                '-c:a', 'adpcm_ima_amv',
-                '-r', '21',
-                '-ac', '1',
-                '-ar', '22050',
-                '-block_size', '1050',
-                'output.amv'
-            );
-
-            log("Conversion done. Generating download...");
-            let data = ffmpeg.FS('readFile', 'output.amv');
-            
-            const blob = new Blob([data.buffer], { type: 'video/x-amv' });
-            const name = selectedFile.name.split('.')[0] + "_minimod.amv";
-            
-            link.href = URL.createObjectURL(blob);
-            link.download = name;
-            link.innerText = "DOWNLOAD " + name;
-            link.style.display = "block";
-            
-            status.innerText = "DONE!";
-            log("Success.");
-            btn.style.display = "none";
-
-        } catch (e) {
-            status.innerText = "ERROR";
-            log("Conversion Error: " + e.message);
-            btn.disabled = false;
-            btn.innerText = "TRY AGAIN";
-        }
-    });
-
-    initEngine();
-</script>
-</body>
-</html>
+    <img src="
