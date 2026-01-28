@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Converter (AVI Hack)</title>
+    <title>AMV Simulator</title>
     <script src="coi-serviceworker.js"></script>
     <style>
         body { font-family: monospace; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -24,8 +24,8 @@
 <body>
 
 <div class="container">
-    <h1>AMV Converter</h1>
-    <p>Drag video here.</p>
+    <h1>AMV Simulator</h1>
+    <p>Uses standard MJPEG/ADPCM to emulate AMV format.</p>
 
     <div class="drop-zone" id="drop_zone">
         <span id="status_text">Loading Engine...</span>
@@ -78,50 +78,41 @@
     async function processFile(file) {
         if (!ffmpeg.isLoaded()) return;
         downloadBtn.style.display = 'none';
-        logBox.innerHTML = `<div style="color:#fca311">--- Starting Conversion for ${file.name} ---</div>`;
+        logBox.innerHTML = `<div style="color:#fca311">--- Starting Simulation for ${file.name} ---</div>`;
         
         try {
             ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            // THE TRICK: We output to 'output.avi' because the web engine
-            // understands AVI containers. But we keep the AMV codecs.
+            // THE SIMULATION COMMAND
+            // 1. Video: Uses 'mjpeg' (Motion JPEG) instead of 'amv' (They are siblings)
+            // 2. Audio: Uses 'adpcm_ima_wav' (Standard ADPCM) instead of 'adpcm_ima_amv'
+            // 3. Format: .avi container
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
-                '-c:v', 'amv',
-                '-c:a', 'adpcm_ima_amv',
+                '-c:v', 'mjpeg',       // Changed from amv
+                '-q:v', '3',           // Quality setting for mjpeg
+                '-c:a', 'adpcm_ima_wav', // Changed from adpcm_ima_amv
                 '-r', '21',
                 '-ac', '1',
                 '-ar', '22050',
-                'output.avi'  // CHANGED FROM .amv TO .avi
+                'output.avi'
             );
 
-            // Read the AVI file
             const data = ffmpeg.FS('readFile', 'output.avi');
-            logBox.innerHTML += `<div style="color:#fca311">--- SUCCESS! File created. ---</div>`;
+            logBox.innerHTML += `<div style="color:#fca311">--- SUCCESS! Simulation created. ---</div>`;
             
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/avi' }));
             downloadBtn.onclick = () => {
                 const a = document.createElement('a');
                 a.href = url;
-                // HERE IS THE MAGIC: We rename it back to .amv for the user
+                // Rename to .amv so the player attempts to read it
                 a.download = `${file.name.split('.')[0]}_converted.amv`;
                 a.click();
             };
-            downloadBtn.innerText = "Download Converted AMV";
+            downloadBtn.innerText = "Download Simulated AMV";
             downloadBtn.style.display = 'inline-block';
 
         } catch (error) {
             logBox.innerHTML += `<div class="error-text">--- ERROR ---</div>`;
-            logBox.innerHTML += `<div class="error-text">${error.message || error}</div>`;
-            // If this fails, the web engine is missing the AMV codecs entirely
-            if (logBox.innerText.includes("Unknown encoder")) {
-                logBox.innerHTML += `<div class="error-text">FATAL: This web engine is missing the specific 'AMV' encoder chips found in the PC version.</div>`;
-            }
-        }
-    }
-
-    loadFFmpeg();
-</script>
-</body>
-</html>
+            logBox.innerHTML +=
