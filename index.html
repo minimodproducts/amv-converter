@@ -1,95 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="coi-serviceworker.js"></script>
     <meta charset="UTF-8">
-    <title>Minimod AMV Converter</title>
-    <script src="coi-serviceworker.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <title>Simple AMV Converter</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #00ff88; text-align: center; padding: 20px; }
-        .box { background: #1e1e1e; max-width: 600px; margin: auto; padding: 25px; border-radius: 12px; border: 2px solid #333; }
-        #log { background: #000; color: #0dff00; font-family: monospace; font-size: 11px; padding: 15px; height: 250px; overflow-y: auto; text-align: left; margin-top: 15px; border: 1px solid #444; white-space: pre-wrap; }
-        button { background: #00ff88; color: #000; border: none; padding: 15px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.1em; }
-        button:disabled { background: #444; color: #888; }
-        input { color: white; margin: 20px 0; }
+        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding: 40px; }
+        .card { background: #2a2a2a; padding: 30px; border-radius: 15px; max-width: 500px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 15px; height: 200px; overflow-y: auto; text-align: left; margin-top: 20px; border-radius: 5px; }
+        button { background: #00ff88; color: black; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.1em; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        input { margin-bottom: 20px; }
     </style>
 </head>
 <body>
 
-<div class="box">
-    <h2>Minimod AMV Converter</h2>
-    <p style="color:white">Convert MP4 to 320x240 AMV (21fps)</p>
-    
+<div class="card">
+    <h2>MP4 to AMV</h2>
     <input type="file" id="uploader" accept="video/mp4">
     <button id="convertBtn">Convert to 1.amv</button>
-    
-    <p id="status" style="color: white;">Status: Ready</p>
-    <div id="log">Logs:</div>
+    <p id="status">Status: Ready</p>
+    <div id="log">Logs will appear here...</div>
 </div>
 
-const { createFFmpeg, fetchFile } = FFmpeg;
-const ffmpeg = createFFmpeg({ 
-    log: true,
-    corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
-});
+<script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    
+    // We use a specific build that is more likely to work on standard hosting
+    const ffmpeg = createFFmpeg({ log: true });
 
-const btn = document.getElementById('convertBtn');
-const logEl = document.getElementById('log');
-const statusEl = document.getElementById('status');
+    const btn = document.getElementById('convertBtn');
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
 
-// NEW: This tells us immediately if the COI script is working
-if (!window.crossOriginIsolated) {
-    statusEl.innerHTML = "<span style='color:red'>⚠️ Security Headers Missing! Press Ctrl+F5</span>";
-} else {
-    statusEl.innerHTML = "<span style='color:green'>✅ System Ready</span>";
-}
+    ffmpeg.setLogger(({ message }) => {
+        logEl.textContent += message + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+    });
 
-ffmpeg.setLogger(({ message }) => {
-    logEl.textContent += "> " + message + "\n";
-    logEl.scrollTop = logEl.scrollHeight;
-});
+    btn.addEventListener('click', async () => {
+        const file = document.getElementById('uploader').files[0];
+        if (!file) return;
 
-btn.addEventListener('click', async () => {
-    if (!window.crossOriginIsolated) {
-        alert("The security worker is not active yet. Please refresh the page (Ctrl+F5).");
-        return;
-    }
+        btn.disabled = true;
+        statusEl.innerText = "Loading Engine... (May take a moment)";
 
-    const file = document.getElementById('uploader').files[0];
-    if (!file) return alert("Please select a file.");
+        try {
+            if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-    btn.disabled = true;
-    try {
-        if (!ffmpeg.isLoaded()) await ffmpeg.load();
+            statusEl.innerText = "Encoding... Please don't close this tab.";
+            
+            // Upload file to memory
+            ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-        statusEl.innerText = "Processing...";
-        ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+            // Execute the specific command for your minimod
+            // We use -f amv to ensure the container is forced
+            await ffmpeg.run(
+                '-i', 'input.mp4',
+                '-vf', 'hflip,scale=320:240',
+                '-c:v', 'amv',
+                '-r', '21',
+                '-c:a', 'adpcm_ima_amv',
+                '-ac', '1',
+                '-ar', '22050',
+                '-f', 'amv',
+                'output.amv'
+            );
 
-        await ffmpeg.run(
-            '-i', 'input.mp4',
-            '-vf', 'hflip,scale=320:240',
-            '-c:v', 'amv',
-            '-r', '21',
-            '-c:a', 'adpcm_ima_amv',
-            '-ac', '1',
-            '-ar', '22050',
-            '-f', 'amv', 
-            'output.amv'
-        );
-
-        const data = ffmpeg.FS('readFile', 'output.amv');
-        const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = '1.amv';
-        a.click();
-        statusEl.innerText = "Success!";
-    } catch (e) {
-        statusEl.innerText = "Error: " + e.message;
-    } finally {
-        btn.disabled = false;
-    }
-});
+            statusEl.innerText = "Finished! Downloading...";
+            
+            const data = ffmpeg.FS('readFile', 'output.amv');
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '1.amv';
+            a.click();
+            
+            statusEl.innerText = "Done!";
+        } catch (e) {
+            statusEl.innerText = "Error: " + e.message;
+            console.error(e);
+        } finally {
+            btn.disabled = false;
+        }
+    });
+</script>
 </body>
 </html>
