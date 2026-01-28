@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Simulator</title>
+    <title>AMV Converter (Final)</title>
     <script src="coi-serviceworker.js"></script>
     <style>
         body { font-family: monospace; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -17,21 +17,24 @@
             white-space: pre-wrap; font-size: 11px; text-align: left; 
             display: block;
         }
-        .error-text { color: #ff5555; font-weight: bold; }
         .btn { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; display: none; margin-top: 10px;}
+        
+        /* New Status Styles */
+        .status-loading { color: #aaa; }
+        .status-ready { color: #0f0; font-weight: bold; }
+        .status-error { color: #ff0000; font-weight: bold; font-size: 1.2em; background: #300; padding: 10px; border: 1px solid red; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>AMV Simulator</h1>
-    <p>Uses standard MJPEG/ADPCM to emulate AMV format.</p>
-
+    <h1>AMV Converter</h1>
+    
     <div class="drop-zone" id="drop_zone">
-        <span id="status_text">Loading Engine...</span>
+        <div id="status_text" class="status-loading">Loading Engine...</div>
     </div>
 
-    <div id="log">Logs will appear here...</div>
+    <div id="log">Initializing...</div>
     <button id="download_btn" class="btn">Download Result</button>
 </div>
 
@@ -43,6 +46,7 @@
     const statusText = document.getElementById('status_text');
     const downloadBtn = document.getElementById('download_btn');
 
+    // Setup the Engine
     const ffmpeg = createFFmpeg({ 
         log: true,
         corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
@@ -54,16 +58,23 @@
     });
 
     async function loadFFmpeg() {
+        // 1. CHECK SECURITY
         if (!window.crossOriginIsolated) {
-            logBox.innerHTML += `<div class="error-text">CRITICAL ERROR: Security Headers Missing.</div>`;
+            statusText.className = "status-error";
+            statusText.innerHTML = "⚠️ SECURITY ERROR ⚠️<br><br>The 'coi-serviceworker.js' file is missing or not active.<br>1. Ensure that file is in your GitHub folder.<br>2. Refresh this page twice.";
+            logBox.innerHTML += `<div style="color:red">CRITICAL: SharedArrayBuffer is not available. Engine cannot start.</div>`;
             return;
         }
+
+        // 2. LOAD ENGINE
         try {
             await ffmpeg.load();
-            statusText.innerText = "Ready. Drop Video.";
+            statusText.className = "status-ready";
+            statusText.innerText = "READY. Drop Video Here.";
             logBox.innerHTML += `<div style="color:#fca311">--- Engine Loaded Successfully ---</div>`;
         } catch (e) {
-            logBox.innerHTML += `<div class="error-text">Engine Load Failed: ${e.message}</div>`;
+            statusText.className = "status-error";
+            statusText.innerText = "Engine Crash: " + e.message;
         }
     }
 
@@ -83,16 +94,14 @@
         try {
             ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            // THE SIMULATION COMMAND
-            // 1. Video: Uses 'mjpeg' (Motion JPEG) instead of 'amv' (They are siblings)
-            // 2. Audio: Uses 'adpcm_ima_wav' (Standard ADPCM) instead of 'adpcm_ima_amv'
-            // 3. Format: .avi container
+            // SIMULATION COMMAND:
+            // Uses MJPEG (Video) and ADPCM_IMA_WAV (Audio) to mimic AMV
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
-                '-c:v', 'mjpeg',       // Changed from amv
-                '-q:v', '3',           // Quality setting for mjpeg
-                '-c:a', 'adpcm_ima_wav', // Changed from adpcm_ima_amv
+                '-c:v', 'mjpeg',       
+                '-q:v', '3',           
+                '-c:a', 'adpcm_ima_wav', 
                 '-r', '21',
                 '-ac', '1',
                 '-ar', '22050',
@@ -100,19 +109,25 @@
             );
 
             const data = ffmpeg.FS('readFile', 'output.avi');
-            logBox.innerHTML += `<div style="color:#fca311">--- SUCCESS! Simulation created. ---</div>`;
+            logBox.innerHTML += `<div style="color:#fca311">--- SUCCESS! ---</div>`;
             
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/avi' }));
             downloadBtn.onclick = () => {
                 const a = document.createElement('a');
                 a.href = url;
-                // Rename to .amv so the player attempts to read it
+                // Rename to .amv for the player
                 a.download = `${file.name.split('.')[0]}_converted.amv`;
                 a.click();
             };
-            downloadBtn.innerText = "Download Simulated AMV";
             downloadBtn.style.display = 'inline-block';
 
         } catch (error) {
-            logBox.innerHTML += `<div class="error-text">--- ERROR ---</div>`;
-            logBox.innerHTML +=
+            logBox.innerHTML += `<div style="color:red">--- ERROR ---</div>`;
+            logBox.innerHTML += `<div style="color:red">${error.message}</div>`;
+        }
+    }
+
+    loadFFmpeg();
+</script>
+</body>
+</html>
