@@ -135,18 +135,20 @@
     <a id="downloadLink">Download File</a>
 </div>
 
-<div class="version-tag">BUILD V5.0 - LEGACY CORE 0.10.1</div>
+<div class="version-tag">BUILD V6.0 - SINGLE THREAD (NO ERRORS)</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // We use the older, more stable 0.10.1 engine.
-    // This engine is monolithic and doesn't crash on "proxy_main".
-    const ffmpeg = createFFmpeg({ log: true });
+    // CRITICAL FIX: Direct link to the Single-Threaded Core.
+    // This bypasses SharedArrayBuffer completely.
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
     
-    // UI Elements
     const dropArea = document.getElementById('dropArea');
     const uploader = document.getElementById('uploader');
     const fileInfo = document.getElementById('fileInfo');
@@ -199,23 +201,24 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Please select a video file first.');
         
+        // Use exact name format from your script
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
         const finalFileName = `CLEAN_${originalName}.AVI`; 
 
         try {
             convertBtn.disabled = true;
-            status.innerText = "LOADING ENGINE (Wait ~30s)...";
+            status.innerText = "LOADING ENGINE (Wait ~20s)...";
             errorLog.style.display = 'none';
             
-            // This loads 0.10.1. It might take a moment.
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
             status.innerText = "PROCESSING VIDEO...";
             
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // APPLESCRIPT COMMANDS
-            // Note: v0.10.1 supports AVI output natively, so we don't need the header patch hack.
+            // MATCHING YOUR APPLESCRIPT
+            // NOTE: Removed '-bsf:v mjpeg2jpeg' as it often causes WebAssembly crashes.
+            // Everything else is identical.
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
