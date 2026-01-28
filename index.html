@@ -4,33 +4,134 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
+    
+    <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
+
     <script src="coi-serviceworker.js"></script>
+
     <style>
-        :root { --bg-color: #000000; --card-bg: #111111; --text-color: #ffffff; --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%); }
-        html, body { background-color: var(--bg-color); margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; color: var(--text-color); display: flex; justify-content: center; align-items: center; }
-        .card { width: 90%; max-width: 500px; padding: 40px 30px; background: var(--card-bg); border-radius: 24px; text-align: center; border: 1px solid #222; }
-        .logo-img { width: 90%; max-width: 450px; height: auto; margin-bottom: 5px; pointer-events: none; }
-        .drop-zone { background: #1a1a1a; border: 2px dashed #333; border-radius: 16px; height: 150px; margin-bottom: 25px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        :root {
+            --bg-color: #000000;
+            --card-bg: #111111;
+            --inner-bg: #1a1a1a;
+            --text-color: #ffffff;
+            --sub-text: #888888;
+            --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
+            --border-radius: 12px;
+        }
+        
+        html, body { 
+            background-color: var(--bg-color) !important; 
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow-x: hidden;
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            color: var(--text-color);
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+
+        .card { 
+            width: 90%;
+            max-width: 500px;
+            padding: 40px 30px; 
+            background: var(--card-bg);
+            border-radius: 24px; 
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            border: 1px solid #222;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo-img { 
+            width: 90%; max-width: 450px; height: auto; 
+            margin-bottom: 5px; display: inline-block; 
+            pointer-events: none;
+        }
+
+        .drop-zone {
+            background: var(--inner-bg);
+            border: 2px dashed #333;
+            border-radius: 16px;
+            height: 150px;
+            margin-bottom: 25px;
+            position: relative;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
         .drop-zone:hover { border-color: #444; background: #1e1e1e; }
-        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-        #convertBtn { width: 100%; padding: 22px; background: var(--gradient); color: #000; border: none; border-radius: 12px; cursor: pointer; font-weight: 900; font-size: 1.4em; }
-        #convertBtn:disabled { background: #333; color: #666; }
-        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; }
-        #downloadLink { display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; text-decoration: none; border-radius: 12px; font-weight: 900; }
+        .drop-zone.drag-over { border-color: #53c0c5; background: #222; transform: scale(1.02); }
+
+        .drop-label { 
+            font-size: 0.85em; color: #53c0c5; font-weight: 700; 
+            letter-spacing: 1px; pointer-events: none; z-index: 5;
+            padding: 20px;
+        }
+
+        #uploader {
+            position: absolute;
+            width: 100%; height: 100%;
+            top: 0; left: 0;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10;
+            display: block;
+        }
+
+        #convertBtn { 
+            width: 100%; padding: 22px; 
+            background: var(--gradient); color: #000; 
+            border: none; border-radius: var(--border-radius); 
+            cursor: pointer; font-weight: 900; font-size: 1.4em; 
+            text-transform: uppercase; letter-spacing: 1px; 
+            transition: all 0.3s ease;
+        }
+
+        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
+        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+
+        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
+        
+        #downloadLink { 
+            display: none; margin-top: 15px; padding: 22px; 
+            background: #fff; color: #000; text-decoration: none; 
+            border-radius: var(--border-radius); font-weight: 900; 
+            text-transform: uppercase; font-size: 1.2em; 
+            width: 100%; box-sizing: border-box;
+        }
+        
+        #error-log {
+            display: none; margin-top: 20px; text-align: left; background: #000; 
+            color: #ff4444; font-family: monospace; font-size: 10px; padding: 10px;
+            border: 1px solid #333; height: 100px; overflow: auto;
+        }
+
+        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
+    
     <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" style="color:#53c0c5; font-weight:700;">DRAG VIDEO HERE</div>
+        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
         <input type="file" id="uploader" accept="video/*">
     </div>
+
     <button id="convertBtn">CONVERT VIDEO</button>
     <div id="status">System Ready</div>
+    <div id="error-log"></div>
     <a id="downloadLink">Download File</a>
 </div>
+
+<div class="version-tag">BUILD V11.0 - FPS 21 + WAV AUDIO</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
@@ -42,37 +143,42 @@
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
     const downloadLink = document.getElementById('downloadLink');
+    const errorLog = document.getElementById('error-log');
     let currentFile = null;
 
+    /* --- UI LOGIC --- */
     uploader.addEventListener('change', () => {
         if (uploader.files.length > 0) {
             currentFile = uploader.files[0];
-            document.getElementById('fileInfo').innerText = currentFile.name;
+            document.getElementById('fileInfo').innerText = currentFile.name.toUpperCase();
+            status.innerText = "FILE LOADED - READY";
         }
     });
 
+    /* --- CONVERSION LOGIC --- */
     convertBtn.addEventListener('click', async () => {
-        if (!currentFile) return alert('Select a file.');
+        if (!currentFile) return alert('Please select a video file first.');
         
         try {
             convertBtn.disabled = true;
             status.innerText = "LOADING ENGINE...";
+            errorLog.style.display = 'none';
             
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            status.innerText = "CONVERTING...";
+            status.innerText = "PROCESSING (FPS 21)...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // *** THE CORRECTED COMMAND ***
-            // 1. Used 'adpcm_ima_wav' (Matches AppleScript)
-            // 2. Used 'avi' format (Matches AppleScript)
+            // *** THE EXACT COMMANDS YOUR PLAYER NEEDS ***
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
+                '-r', '21',                  // Force 21 FPS
                 '-c:v', 'mjpeg',
                 '-q:v', '3',
                 '-vtag', 'MJPG',
-                '-c:a', 'adpcm_ima_wav',  // <--- THIS WAS THE MISSING KEY
+                '-bsf:v', 'mjpeg2jpeg',      // Fixes the MJPEG header for old players
+                '-c:a', 'adpcm_ima_wav',     // The working audio codec from your script
                 '-ac', '1',
                 '-ar', '22050',
                 '-map_metadata', '-1',
@@ -87,16 +193,20 @@
             const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             const url = URL.createObjectURL(blob);
             
+            const finalName = `CLEAN_${currentFile.name.split('.')[0]}.AVI`;
             downloadLink.href = url;
-            downloadLink.download = `CLEAN_${currentFile.name.split('.')[0]}.AVI`;
-            downloadLink.innerText = "DOWNLOAD VIDEO";
-            downloadLink.style.display = 'block';
+            downloadLink.download = finalName;
+            downloadLink.innerText = `DOWNLOAD ${finalName}`;
+            
             status.innerText = "DONE!";
+            downloadLink.style.display = 'block';
             convertBtn.style.display = 'none';
 
         } catch (e) {
             console.error(e);
-            status.innerText = "ERROR (Check Console)";
+            status.innerText = "FAILED - CHECK LOGS";
+            errorLog.style.display = 'block';
+            errorLog.innerText = e.message;
             convertBtn.disabled = false;
         }
     });
