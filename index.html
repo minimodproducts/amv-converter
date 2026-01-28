@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Converter (Debug)</title>
+    <title>AMV Converter (AVI Hack)</title>
     <script src="coi-serviceworker.js"></script>
     <style>
         body { font-family: monospace; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
@@ -15,7 +15,7 @@
             background: #000; border: 1px solid #444; color: #0f0; 
             padding: 10px; height: 300px; overflow-y: scroll; 
             white-space: pre-wrap; font-size: 11px; text-align: left; 
-            display: block; /* Force display */
+            display: block;
         }
         .error-text { color: #ff5555; font-weight: bold; }
         .btn { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; display: none; margin-top: 10px;}
@@ -24,8 +24,8 @@
 <body>
 
 <div class="container">
-    <h1>AMV Debug Tool</h1>
-    <p>1. Drag video here. 2. Read the log below.</p>
+    <h1>AMV Converter</h1>
+    <p>Drag video here.</p>
 
     <div class="drop-zone" id="drop_zone">
         <span id="status_text">Loading Engine...</span>
@@ -43,12 +43,11 @@
     const statusText = document.getElementById('status_text');
     const downloadBtn = document.getElementById('download_btn');
 
-    // 1. Setup Logger to print to screen (Fixed)
     const ffmpeg = createFFmpeg({ 
         log: true,
         corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
         logger: ({ message }) => {
-            console.log(message); // Also log to browser console
+            console.log(message);
             logBox.innerHTML += `<div>${message}</div>`;
             logBox.scrollTop = logBox.scrollHeight;
         }
@@ -57,7 +56,6 @@
     async function loadFFmpeg() {
         if (!window.crossOriginIsolated) {
             logBox.innerHTML += `<div class="error-text">CRITICAL ERROR: Security Headers Missing.</div>`;
-            logBox.innerHTML += `<div>Ensure 'coi-serviceworker.js' is in the folder and you reloaded the page twice.</div>`;
             return;
         }
         try {
@@ -85,7 +83,8 @@
         try {
             ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            // Run conversion (With -block_size removed)
+            // THE TRICK: We output to 'output.avi' because the web engine
+            // understands AVI containers. But we keep the AMV codecs.
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
@@ -94,27 +93,31 @@
                 '-r', '21',
                 '-ac', '1',
                 '-ar', '22050',
-                'output.amv'
+                'output.avi'  // CHANGED FROM .amv TO .avi
             );
 
-            // Check if output exists
-            const data = ffmpeg.FS('readFile', 'output.amv');
+            // Read the AVI file
+            const data = ffmpeg.FS('readFile', 'output.avi');
             logBox.innerHTML += `<div style="color:#fca311">--- SUCCESS! File created. ---</div>`;
             
-            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/amv' }));
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/avi' }));
             downloadBtn.onclick = () => {
                 const a = document.createElement('a');
                 a.href = url;
+                // HERE IS THE MAGIC: We rename it back to .amv for the user
                 a.download = `${file.name.split('.')[0]}_converted.amv`;
                 a.click();
             };
+            downloadBtn.innerText = "Download Converted AMV";
             downloadBtn.style.display = 'inline-block';
 
         } catch (error) {
-            logBox.innerHTML += `<div class="error-text">--- ERROR DETAILS ---</div>`;
-            // Print the specific error message to the screen
+            logBox.innerHTML += `<div class="error-text">--- ERROR ---</div>`;
             logBox.innerHTML += `<div class="error-text">${error.message || error}</div>`;
-            console.error(error);
+            // If this fails, the web engine is missing the AMV codecs entirely
+            if (logBox.innerText.includes("Unknown encoder")) {
+                logBox.innerHTML += `<div class="error-text">FATAL: This web engine is missing the specific 'AMV' encoder chips found in the PC version.</div>`;
+            }
         }
     }
 
