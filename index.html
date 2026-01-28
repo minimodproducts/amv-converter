@@ -2,22 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Simple AMV Converter</title>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
+    <title>Minimod AMV Converter</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding: 40px; }
-        .card { background: #2a2a2a; padding: 30px; border-radius: 15px; max-width: 500px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 15px; height: 200px; overflow-y: auto; text-align: left; margin-top: 20px; border-radius: 5px; }
-        button { background: #00ff88; color: black; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1.1em; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        input { margin-bottom: 20px; }
+        body { font-family: sans-serif; background: #121212; color: #eee; text-align: center; padding: 20px; }
+        .card { background: #1e1e1e; max-width: 500px; margin: auto; padding: 25px; border-radius: 12px; border: 1px solid #333; }
+        #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; height: 200px; overflow-y: auto; text-align: left; margin-top: 15px; border-radius: 5px; white-space: pre-wrap; }
+        button { background: #00ff88; color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
+        button:disabled { background: #444; color: #888; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>MP4 to AMV</h2>
-    <input type="file" id="uploader" accept="video/mp4">
+    <h2>Minimod AMV Converter</h2>
+    <input type="file" id="uploader" accept="video/mp4" style="margin:20px 0;">
     <button id="convertBtn">Convert to 1.amv</button>
     <p id="status">Status: Ready</p>
     <div id="log">Logs will appear here...</div>
@@ -26,8 +25,11 @@
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // We use a specific build that is more likely to work on standard hosting
-    const ffmpeg = createFFmpeg({ log: true });
+    // This build contains the AMV muxer and codecs
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+    });
 
     const btn = document.getElementById('convertBtn');
     const logEl = document.getElementById('log');
@@ -43,18 +45,18 @@
         if (!file) return;
 
         btn.disabled = true;
-        statusEl.innerText = "Loading Engine... (May take a moment)";
+        statusEl.innerText = "Initializing Engine...";
 
         try {
+            // Load the engine
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-            statusEl.innerText = "Encoding... Please don't close this tab.";
+            statusEl.innerText = "Encoding... (Please wait)";
             
-            // Upload file to memory
+            // Put the video in memory
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // Execute the specific command for your minimod
-            // We use -f amv to ensure the container is forced
+            // Run conversion
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -63,15 +65,13 @@
                 '-c:a', 'adpcm_ima_amv',
                 '-ac', '1',
                 '-ar', '22050',
-                '-f', 'amv',
                 'output.amv'
             );
 
-            statusEl.innerText = "Finished! Downloading...";
+            statusEl.innerText = "Success! Downloading...";
             
             const data = ffmpeg.FS('readFile', 'output.amv');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
-            
             const a = document.createElement('a');
             a.href = url;
             a.download = '1.amv';
@@ -79,7 +79,7 @@
             
             statusEl.innerText = "Done!";
         } catch (e) {
-            statusEl.innerText = "Error: " + e.message;
+            statusEl.innerText = "Error - Check logs";
             console.error(e);
         } finally {
             btn.disabled = false;
