@@ -6,7 +6,7 @@
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #222; color: #fff; text-align: center; padding: 20px; }
-        .box { background: #333; max-width: 500px; margin: auto; padding: 20px; border-radius: 10px; }
+        .box { background: #333; max-width: 500px; margin: auto; padding: 20px; border-radius: 10px; border: 1px solid #444; }
         #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; height: 150px; overflow-y: auto; text-align: left; margin-top: 15px; }
         button { background: #00ff88; color: #000; border: none; padding: 15px; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
         button:disabled { background: #555; color: #888; cursor: wait; }
@@ -15,17 +15,17 @@
 <body>
 
 <div class="box">
-    <h2>Simple AMV Converter</h2>
+    <h2>Minimod Converter (Web Compatible)</h2>
     <input type="file" id="uploader" accept="video/mp4" style="margin: 20px 0;">
     <button id="convertBtn">Convert Video</button>
-    <div id="status" style="margin-top:10px">Status: Ready</div>
+    <div id="status" style="margin-top:10px; color: #aaa;">Status: Ready</div>
     <div id="log">Logs:</div>
 </div>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // Load version 0.10.1 which works without special security headers
+    // We use the basic version. No special headers needed.
     const ffmpeg = createFFmpeg({ log: true });
 
     const btn = document.getElementById('convertBtn');
@@ -42,29 +42,32 @@
         if (!file) return alert("Select a file first");
 
         btn.disabled = true;
-        status.innerText = "Loading... (Wait 10s)";
+        status.innerText = "Loading Engine (This happens once)...";
 
         try {
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-            status.innerText = "Converting... (Do not close)";
+            status.innerText = "Processing... (Do not close)";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // THE TRICK: We force '-f avi' (which is supported) 
-            // but keep the specific AMV codecs and file extension.
+            // THE FIX:
+            // 1. We use '-f avi' because the web version crashes on '-f amv'
+            // 2. We keep your exact resolution, flip, and fps.
+            // 3. We save it as .amv so the device recognizes it.
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
-                '-c:v', 'amv',
                 '-r', '21',
-                '-c:a', 'adpcm_ima_amv',
                 '-ac', '1',
                 '-ar', '22050',
-                '-f', 'avi',   // <--- FORCE AVI FORMAT
-                'output.amv'   // <--- BUT SAVE AS .AMV
+                '-c:v', 'mjpeg',       // Use MJPEG (Standard for AMV players)
+                '-q:v', '3',           // High quality
+                '-c:a', 'adpcm_ima_wav', // Standard IMA ADPCM audio
+                '-f', 'avi',           // Force AVI container (Web safe)
+                'output.amv'
             );
 
-            status.innerText = "Done! Downloading...";
+            status.innerText = "Success! Downloading...";
             const data = ffmpeg.FS('readFile', 'output.amv');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
             
@@ -74,7 +77,7 @@
             a.click();
 
         } catch (e) {
-            status.innerText = "Error!";
+            status.innerText = "Error - Check Logs";
             console.error(e);
         } finally {
             btn.disabled = false;
