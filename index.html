@@ -46,7 +46,7 @@
         .logo-img { 
             width: 90%; max-width: 450px; height: auto; 
             margin-bottom: 5px; display: inline-block; 
-            pointer-events: none; /* Prevents logo from blocking clicks */
+            pointer-events: none;
         }
 
         .tool-title { 
@@ -54,14 +54,13 @@
             letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
         }
 
-        /* --- NEW ROBUST DROP ZONE --- */
         .drop-zone {
             background: var(--inner-bg);
             border: 2px dashed #333;
             border-radius: 16px;
-            height: 150px; /* Fixed height for easier clicking */
+            height: 150px;
             margin-bottom: 25px;
-            position: relative; /* CRITICAL for absolute positioning of input */
+            position: relative;
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
@@ -78,14 +77,13 @@
             padding: 20px;
         }
 
-        /* THE INVISIBLE CLICK CATCHER */
         #uploader {
             position: absolute;
             width: 100%; height: 100%;
             top: 0; left: 0;
             opacity: 0;
             cursor: pointer;
-            z-index: 10; /* Sits on top of everything in the box */
+            z-index: 10;
             display: block;
         }
 
@@ -137,19 +135,16 @@
     <a id="downloadLink">Download File</a>
 </div>
 
-<div class="version-tag">BUILD V4.0 - EXACT UI + STABLE CORE</div>
+<div class="version-tag">BUILD V5.0 - LEGACY CORE 0.10.1</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // IMPORTANT: Use Single-Threaded Core (core-st)
-    // This fixes the "SharedArrayBuffer" error and removes the need for extra files.
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
+    // We use the older, more stable 0.10.1 engine.
+    // This engine is monolithic and doesn't crash on "proxy_main".
+    const ffmpeg = createFFmpeg({ log: true });
     
     // UI Elements
     const dropArea = document.getElementById('dropArea');
@@ -162,7 +157,7 @@
 
     let currentFile = null;
 
-    /* --- UI LOGIC (UNCHANGED) --- */
+    /* --- UI LOGIC --- */
     
     uploader.addEventListener('change', () => {
         if (uploader.files.length > 0) handleFile(uploader.files[0]);
@@ -204,7 +199,6 @@
     convertBtn.addEventListener('click', async () => {
         if (!currentFile) return alert('Please select a video file first.');
         
-        // Exact Naming Convention from your AppleScript
         const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
         const finalFileName = `CLEAN_${originalName}.AVI`; 
 
@@ -213,16 +207,15 @@
             status.innerText = "LOADING ENGINE (Wait ~30s)...";
             errorLog.style.display = 'none';
             
+            // This loads 0.10.1. It might take a moment.
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
             status.innerText = "PROCESSING VIDEO...";
             
-            // Write File
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // Run Exact AppleScript Command
-            // I removed '-bsf:v mjpeg2jpeg' because it often crashes the web version.
-            // If you need it, add it back, but this usually works better without it on web.
+            // APPLESCRIPT COMMANDS
+            // Note: v0.10.1 supports AVI output natively, so we don't need the header patch hack.
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
@@ -240,7 +233,6 @@
                 'output.avi'
             );
 
-            // Read & Download
             const data = ffmpeg.FS('readFile', 'output.avi');
             const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
             const url = URL.createObjectURL(blob);
