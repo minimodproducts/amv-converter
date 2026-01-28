@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Video Converter (Fixed)</title>
+    <title>AMV Converter</title>
+    <script src="coi-serviceworker.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
         .container { text-align: center; width: 90%; max-width: 600px; }
@@ -16,7 +17,8 @@
         button { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 20px; display: none; }
         button:hover { background: #e5940e; }
         .loader { display: none; margin-top: 20px; color: #fca311; }
-        .error { color: #ff4444; margin-top: 10px; }
+        .footer { margin-top: 50px; font-size: 12px; color: #555; }
+        .error { color: #ff4444; margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -26,13 +28,15 @@
     <p>Drag & Drop your video here.</p>
 
     <div class="drop-zone" id="drop_zone">
-        <span id="status_text">Loading engine...</span>
+        <span id="status_text">Initializing...</span>
     </div>
     <div id="error_msg" class="error"></div>
 
     <div class="loader" id="loader">Processing... (Do not close tab)</div>
     <div id="log"></div>
     <button id="download_btn">Download AMV</button>
+    
+    <div class="footer">Tool Version: v1.0.3</div>
 </div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
@@ -40,10 +44,10 @@
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // Explicitly set the corePath to ensure it is found
+    // Core engine config
     const ffmpeg = createFFmpeg({ 
         log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js'
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js' 
     });
 
     const dropZone = document.getElementById('drop_zone');
@@ -54,18 +58,26 @@
     const loader = document.getElementById('loader');
 
     async function loadFFmpeg() {
+        // SECURITY CHECK
+        if (!window.crossOriginIsolated) {
+            statusText.innerText = "Security Check Failed";
+            errorMsg.innerHTML = "Error: 'coi-serviceworker.js' is missing or not working.<br>Refresh the page once. If this persists, ensure both files are in the GitHub folder.";
+            return;
+        }
+
         try {
+            statusText.innerText = "Loading Engine...";
             await ffmpeg.load();
             statusText.innerText = "Ready. Drop video file here.";
             errorMsg.innerText = "";
         } catch (e) {
-            statusText.innerText = "Engine Failed.";
-            // Print the actual error to the screen so we can see it
-            errorMsg.innerText = "Error: " + e.message;
+            statusText.innerText = "Engine Failed";
+            errorMsg.innerText = e.message;
             console.error(e);
         }
     }
 
+    // Drag and Drop Logic
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', async (e) => {
@@ -75,6 +87,7 @@
         if (files.length > 0) processFile(files[0]);
     });
 
+    // Click to upload
     dropZone.addEventListener('click', () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -92,7 +105,7 @@
         try {
             ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            [cite_start]// EXACT arguments from your CONVERT.bat [cite: 1]
+            [cite_start]// EXACT ARGUMENTS FROM YOUR .BAT FILE [cite: 1]
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
@@ -118,8 +131,8 @@
             downloadBtn.style.display = 'inline-block';
             statusText.innerText = "Conversion Complete!";
         } catch (error) {
-            statusText.innerText = "Error during conversion.";
-            errorMsg.innerText = error.message;
+            statusText.innerText = "Conversion Error";
+            errorMsg.innerText = "Check console for details.";
             console.error(error);
         } finally {
             loader.style.display = 'none';
