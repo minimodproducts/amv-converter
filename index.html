@@ -74,4 +74,186 @@
         .drop-label { 
             font-size: 0.85em; color: #53c0c5; font-weight: 700; 
             letter-spacing: 1px; pointer-events: none; z-index: 5;
-            padding:
+            padding: 20px;
+        }
+
+        #uploader {
+            position: absolute;
+            width: 100%; height: 100%;
+            top: 0; left: 0;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10;
+            display: block;
+        }
+
+        #convertBtn { 
+            width: 100%; padding: 22px; 
+            background: var(--gradient); color: #000; 
+            border: none; border-radius: var(--border-radius); 
+            cursor: pointer; font-weight: 900; font-size: 1.4em; 
+            text-transform: uppercase; letter-spacing: 1px; 
+            transition: all 0.3s ease;
+        }
+
+        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
+        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
+
+        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
+        
+        #downloadLink { 
+            display: none; margin-top: 15px; padding: 22px; 
+            background: #fff; color: #000; text-decoration: none; 
+            border-radius: var(--border-radius); font-weight: 900; 
+            text-transform: uppercase; font-size: 1.2em; 
+            width: 100%; box-sizing: border-box;
+        }
+
+        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
+        
+        #error-log {
+            display: none; margin-top: 20px; text-align: left; background: #000; 
+            color: #ff4444; font-family: monospace; font-size: 10px; padding: 10px;
+            border: 1px solid #333; height: 100px; overflow: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
+    <div class="tool-title">VIDEO CONVERSION TOOL</div>
+    
+    <div class="drop-zone" id="dropArea">
+        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
+        <input type="file" id="uploader" accept="video/*">
+    </div>
+
+    <button id="convertBtn">CONVERT VIDEO</button>
+    <div id="status">System Ready</div>
+    <div id="error-log"></div>
+    <a id="downloadLink">Download File</a>
+</div>
+
+<div class="version-tag">BUILD V8.0 - LEGACY CORE + BITSTREAM FILTER</div>
+
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
+
+<script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    
+    // We use the Monolithic 0.10.1 core. It has the filters we need and doesn't crash on headers.
+    const ffmpeg = createFFmpeg({ log: true });
+    
+    const dropArea = document.getElementById('dropArea');
+    const uploader = document.getElementById('uploader');
+    const fileInfo = document.getElementById('fileInfo');
+    const status = document.getElementById('status');
+    const convertBtn = document.getElementById('convertBtn');
+    const downloadLink = document.getElementById('downloadLink');
+    const errorLog = document.getElementById('error-log');
+
+    let currentFile = null;
+
+    /* --- UI LOGIC --- */
+    
+    uploader.addEventListener('change', () => {
+        if (uploader.files.length > 0) handleFile(uploader.files[0]);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            dropArea.classList.add('drag-over');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, (e) => {
+            e.preventDefault(); e.stopPropagation();
+            dropArea.classList.remove('drag-over');
+        }, false);
+    });
+
+    dropArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            uploader.files = files; 
+            handleFile(files[0]);
+        }
+    });
+
+    function handleFile(file) {
+        currentFile = file;
+        fileInfo.innerText = file.name.toUpperCase();
+        fileInfo.style.color = "#eaba1f";
+        status.innerText = "FILE LOADED - READY TO CONVERT";
+        errorLog.style.display = 'none';
+    }
+
+    /* --- CONVERSION LOGIC --- */
+    
+    convertBtn.addEventListener('click', async () => {
+        if (!currentFile) return alert('Please select a video file first.');
+        
+        const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
+        const finalFileName = `CLEAN_${originalName}.AVI`; 
+
+        try {
+            convertBtn.disabled = true;
+            status.innerText = "LOADING ENGINE (Wait ~40s)...";
+            errorLog.style.display = 'none';
+            
+            if (!ffmpeg.isLoaded()) await ffmpeg.load();
+            
+            status.innerText = "PROCESSING...";
+            
+            ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
+
+            // *** THE EXACT APPLESCRIPT COMMAND ***
+            // Added '-bsf:v mjpeg2jpeg' which handles the Huffman tables for old players.
+            // Added '-r 20' to ensure frame rate compatibility.
+            await ffmpeg.run(
+                '-i', 'input',
+                '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
+                '-c:v', 'mjpeg',
+                '-q:v', '3',
+                '-vtag', 'MJPG',
+                '-bsf:v', 'mjpeg2jpeg',     // <--- CRITICAL FILTER FROM YOUR SCRIPT
+                '-c:a', 'adpcm_ima_wav',
+                '-ac', '1',
+                '-ar', '22050',
+                '-r', '20',                 // <--- SAFE STANDARD FPS
+                '-map_metadata', '-1',
+                '-fflags', '+bitexact',
+                '-flags:v', '+bitexact',
+                '-f', 'avi',
+                '-y',
+                'output.avi'
+            );
+
+            const data = ffmpeg.FS('readFile', 'output.avi');
+            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
+            const url = URL.createObjectURL(blob);
+            
+            downloadLink.href = url;
+            downloadLink.download = finalFileName;
+            downloadLink.innerText = `DOWNLOAD ${finalFileName}`;
+            
+            status.innerText = "CONVERSION COMPLETE";
+            downloadLink.style.display = 'block';
+            convertBtn.style.display = 'none';
+            dropArea.style.display = 'none';
+
+        } catch (e) {
+            console.error(e);
+            status.innerText = "CONVERSION FAILED";
+            errorLog.style.display = 'block';
+            errorLog.innerText = "Error details:\n" + e.message;
+            convertBtn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
