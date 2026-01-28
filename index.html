@@ -3,75 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimod MP4 to AMV Converter</title>
+    <title>AMV Web Tool</title>
     
     <script src="coi-serviceworker.js"></script>
-    
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { background: #2d2d2d; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 500px; text-align: center; }
-        h1 { color: #00ff88; margin-bottom: 1.5rem; }
-        input[type="file"] { margin: 20px 0; padding: 10px; background: #3d3d3d; border-radius: 5px; width: 100%; box-sizing: border-box; }
-        button { background: #00ff88; color: #1a1a1a; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: transform 0.2s; width: 100%; }
-        button:hover { transform: scale(1.02); background: #00cc6e; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+        .card { background: #1e1e1e; max-width: 500px; margin: 40px auto; padding: 30px; border-radius: 12px; border: 1px solid #333; }
+        #log { background: #000; color: #0dff00; font-family: monospace; font-size: 11px; padding: 15px; height: 200px; overflow-y: auto; text-align: left; border-radius: 6px; margin-top: 20px; white-space: pre-wrap; }
+        button { background: #00ff88; color: #000; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; }
         button:disabled { background: #444; color: #888; cursor: not-allowed; }
-        #status { margin-top: 20px; font-weight: bold; color: #00ff88; }
-        #log { margin-top: 20px; background: #000; color: #00ff00; font-family: monospace; font-size: 11px; padding: 10px; height: 150px; overflow-y: auto; text-align: left; border-radius: 5px; border: 1px solid #444; }
+        .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>AMV Converter</h1>
-    <p>Convert MP4 to 320x240 AMV (21fps)</p>
+<div class="card">
+    <h2>MP4 to AMV (320x240)</h2>
+    <p id="header-check" style="font-size: 12px; color: #aaa;">Checking security headers...</p>
     
-    <input type="file" id="uploader" accept="video/mp4">
-    <button id="convertBtn">Convert Video</button>
+    <input type="file" id="uploader" accept="video/mp4" style="margin: 20px 0;">
+    <button id="convertBtn">Convert to AMV</button>
     
-    <div id="status">Ready</div>
-    <div id="log"></div>
+    <div id="status" style="margin-top: 15px; font-weight: bold; color: #00ff88;">Ready</div>
+    <div id="log">Logs will appear here...</div>
 </div>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: true });
-
-    const convertBtn = document.getElementById('convertBtn');
-    const status = document.getElementById('status');
-    const logElement = document.getElementById('log');
-
-    // Display logs on screen
-    ffmpeg.setLogger(({ message }) => {
-        const line = document.createElement('div');
-        line.textContent = message;
-        logElement.appendChild(line);
-        logElement.scrollTop = logElement.scrollHeight;
+    
+    // Setup FFmpeg with clear logging
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        mainName: 'main',
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
     });
 
-    convertBtn.addEventListener('click', async () => {
+    const btn = document.getElementById('convertBtn');
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const headerCheck = document.getElementById('header-check');
+
+    // Security Header Check
+    if (window.crossOriginIsolated) {
+        headerCheck.innerHTML = "✅ Security Headers Active";
+        headerCheck.style.color = "#00ff88";
+    } else {
+        headerCheck.innerHTML = "❌ Security Headers Missing. Please refresh (Ctrl+F5).";
+        headerCheck.style.color = "#ff4444";
+    }
+
+    // Logger function
+    ffmpeg.setLogger(({ message }) => {
+        const div = document.createElement('div');
+        div.textContent = message;
+        logEl.appendChild(div);
+        logEl.scrollTop = logEl.scrollHeight;
+    });
+
+    btn.addEventListener('click', async () => {
         const file = document.getElementById('uploader').files[0];
-        if (!file) {
-            alert("Please select an MP4 file first.");
-            return;
-        }
+        if (!file) return alert("Select a file!");
 
         try {
-            convertBtn.disabled = true;
-            status.innerText = "Loading FFmpeg Engine...";
+            btn.disabled = true;
+            statusEl.innerText = "Loading Engine...";
 
             if (!ffmpeg.isLoaded()) {
                 await ffmpeg.load();
             }
 
-            status.innerText = "Processing Video...";
+            statusEl.innerText = "Processing... (This takes a moment)";
             
-            // 1. Write file to virtual memory
+            // Write input file
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // 2. Run conversion (CORRECTED COMMAND ORDER)
-            // Note: -block_size is now placed after the audio codec
+            // RUN COMMAND: Exactly matched to your specs
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -84,25 +92,21 @@
                 'output.amv'
             );
 
-            status.innerText = "Reading Finished File...";
+            statusEl.innerText = "Finished!";
             
-            // 3. Read result and trigger download
+            // Download the file
             const data = ffmpeg.FS('readFile', 'output.amv');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
-            
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'converted_video.amv';
-            document.body.appendChild(a);
+            a.download = '1.amv';
             a.click();
-            document.body.removeChild(a);
 
-            status.innerText = "Success! Download started.";
-        } catch (error) {
-            console.error(error);
-            status.innerText = "Error: See logs below.";
+        } catch (err) {
+            console.error(err);
+            statusEl.innerText = "Error - Check logs";
         } finally {
-            convertBtn.disabled = false;
+            btn.disabled = false;
         }
     });
 </script>
