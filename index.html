@@ -3,57 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
+    <title>Minimod AMV Converter</title>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
-        :root { --bg-color: #000000; --card-bg: #111111; --inner-bg: #1a1a1a; --text-color: #ffffff; --accent: #53c0c5; --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%); }
-        body { background-color: var(--bg-color); color: var(--text-color); font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { width: 90%; max-width: 500px; padding: 40px; background: var(--card-bg); border-radius: 24px; text-align: center; border: 1px solid #222; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
-        .logo-img { width: 80%; max-width: 400px; margin-bottom: 20px; pointer-events: none; }
-        .drop-zone { background: var(--inner-bg); border: 2px dashed #333; border-radius: 16px; height: 160px; margin-bottom: 20px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-        .drop-zone:hover { border-color: #555; background: #222; }
-        .drop-zone.dragover { background: #003300; border-color: #0f0; }
-        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-        .drop-label { color: var(--accent); font-weight: 700; pointer-events: none; }
-        #convertBtn { width: 100%; padding: 20px; background: var(--gradient); border: none; border-radius: 12px; font-weight: 900; font-size: 1.2em; cursor: pointer; opacity: 0.5; cursor: not-allowed; }
-        #convertBtn.ready { opacity: 1; cursor: pointer; }
-        #status { margin-top: 20px; font-weight: bold; color: var(--accent); min-height: 20px; white-space: pre-wrap;}
-        #downloadLink { display: none; margin-top: 20px; padding: 20px; background: #fff; color: #000; text-decoration: none; border-radius: 12px; font-weight: 900; }
-        #debugLog { display: block; width: 100%; height: 100px; margin-top: 20px; background: #000; border: 1px solid #333; color: #f55; font-family: monospace; font-size: 10px; text-align: left; padding: 10px; }
-        .version-tag { margin-top: 15px; font-size: 10px; color: #444; }
+        body { font-family: sans-serif; max-width: 600px; margin: 50px auto; text-align: center; background: #f4f4f9; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #log { margin-top: 20px; font-size: 12px; color: #666; height: 100px; overflow-y: auto; text-align: left; background: #eee; padding: 10px; border-radius: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:disabled { background: #ccc; }
+        input { margin-bottom: 20px; }
+        progress { width: 100%; height: 20px; margin-top: 10px; }
     </style>
-    
-    <script>
-        (function() {
-            if (window.crossOriginIsolated) return; // If already fixed, stop.
-            const script = document.createElement('script');
-            const code = `
-                const handler = {
-                    install: (e) => e.waitUntil(self.skipWaiting()),
-                    activate: (e) => e.waitUntil(self.clients.claim()),
-                    fetch: (e) => {
-                        if (e.request.mode === 'navigate') {
-                            e.respondWith(fetch(e.request).then((resp) => {
-                                const headers = new Headers(resp.headers);
-                                headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
-                                headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-                                return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
-                            }));
-                        } else {
-                            e.respondWith(fetch(e.request));
-                        }
-                    }
-                };
-                self.addEventListener('install', handler.install);
-                self.addEventListener('activate', handler.activate);
-                self.addEventListener('fetch', handler.fetch);
-            `;
-            const blob = new Blob([code], { type: 'application/javascript' });
-            const url = URL.createObjectURL(blob);
-            navigator.serviceWorker.register(url).then(() => window.location.reload());
-        })();
-    </script>
 </head>
 <body>
 
-<div class="card">
-    <img src="
+<div class="container">
+    <h2>AMV Video Converter</h2>
+    <p>Convert MP4 to specific AMV format (320x240, 21fps)</p>
+    
+    <input type="file" id="uploader" accept="video/mp4">
+    <br>
+    <button id="convertBtn">Convert to AMV</button>
+    
+    <div id="status">Status: Waiting for file...</div>
+    <progress id="progress" value="0" max="100" style="display:none;"></progress>
+    <div id="log"></div>
+</div>
+
+<script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
+
+    const convertBtn = document.getElementById('convertBtn');
+    const uploader = document.getElementById('uploader');
+    const status = document.getElementById('status');
+    const progress = document.getElementById('progress');
+    const logElement = document.getElementById('log');
+
+    // Add logging to the UI
+    ffmpeg.setLogger(({ message }) => {
+        const line = document.createElement('div');
+        line.textContent = message;
+        logElement.appendChild(line);
+        logElement.scrollTop = logElement.scrollHeight;
+    });
+
+    // Track progress
+    ffmpeg.setProgress(({ ratio }) => {
+        progress.value = ratio * 100;
+    });
+
+    convertBtn.addEventListener('click', async () => {
+        const file = uploader.files[0];
+        if (!file) return alert('Please select a file first!');
+
+        convertBtn.disabled = true;
+        status.innerText = 'Loading FFmpeg core...';
+        progress.style.display = 'block';
+
+        if (!ffmpeg.isLoaded()) {
+            await ffmpeg.load();
+        }
+
+        status.innerText = 'Converting...';
+        const { name } = file;
+        
+        // Write file to FFmpeg virtual memory
+        ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+
+        // Run the specific command provided
+        // Command: -i "minimod.mp4" -vf "hflip,scale=320:240" -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050 "1.amv"
+        await ffmpeg.run(
+            '-i', 'input.mp4',
+            '-vf', 'hflip,scale=320:240',
+            '-c:v', 'amv',
+            '-c:a', 'adpcm_ima_amv',
+            '-r', '21',
+            '-ac', '1',
+            '-ar', '22050',
+            '-block_size', '1050',
+            'output.amv'
+        );
+
+        status.innerText = 'Conversion Complete!';
+        
+        // Read the result
+        const data = ffmpeg.FS('readFile', 'output.amv');
+
+        // Create a download link
+        const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'converted_video.amv';
+        a.click();
+
+        convertBtn.disabled = false;
+    });
+</script>
+
+</body>
+</html>
