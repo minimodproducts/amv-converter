@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Minimod AMV Converter</title>
+    <script src="coi-serviceworker.js"></script>
     <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #121212; color: #eee; text-align: center; padding: 20px; }
@@ -10,33 +11,45 @@
         #log { background: #000; color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; height: 200px; overflow-y: auto; text-align: left; margin-top: 15px; border-radius: 5px; white-space: pre-wrap; }
         button { background: #00ff88; color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; }
         button:disabled { background: #444; color: #888; }
+        .status-msg { margin: 10px 0; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <h2>Minimod AMV Converter</h2>
+    <div id="security-check" class="status-msg">Checking Security...</div>
+    
     <input type="file" id="uploader" accept="video/mp4" style="margin:20px 0;">
-    <button id="convertBtn">Convert to 1.amv</button>
-    <p id="status">Status: Ready</p>
-    <div id="log">Logs will appear here...</div>
+    <button id="convertBtn" disabled>Convert to 1.amv</button>
+    <div id="log">Logs:</div>
 </div>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // This build contains the AMV muxer and codecs
+    // Check if security headers are active
+    const securityCheck = document.getElementById('security-check');
+    const btn = document.getElementById('convertBtn');
+    
+    if (window.crossOriginIsolated) {
+        securityCheck.innerHTML = "✅ System Secure & Ready";
+        securityCheck.style.color = "#00ff88";
+        btn.disabled = false;
+    } else {
+        securityCheck.innerHTML = "⚠️ Security initializing... Please wait or Refresh (Ctrl+F5)";
+        securityCheck.style.color = "#ffcc00";
+    }
+
     const ffmpeg = createFFmpeg({ 
         log: true,
         corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
     });
 
-    const btn = document.getElementById('convertBtn');
     const logEl = document.getElementById('log');
-    const statusEl = document.getElementById('status');
 
     ffmpeg.setLogger(({ message }) => {
-        logEl.textContent += message + "\n";
+        logEl.textContent += "> " + message + "\n";
         logEl.scrollTop = logEl.scrollHeight;
     });
 
@@ -45,18 +58,12 @@
         if (!file) return;
 
         btn.disabled = true;
-        statusEl.innerText = "Initializing Engine...";
-
         try {
-            // Load the engine
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-            statusEl.innerText = "Encoding... (Please wait)";
-            
-            // Put the video in memory
+            logEl.textContent += "!! Encoding Started - Do not close tab !!\n";
             ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
 
-            // Run conversion
             await ffmpeg.run(
                 '-i', 'input.mp4',
                 '-vf', 'hflip,scale=320:240',
@@ -65,11 +72,10 @@
                 '-c:a', 'adpcm_ima_amv',
                 '-ac', '1',
                 '-ar', '22050',
+                '-f', 'amv',
                 'output.amv'
             );
 
-            statusEl.innerText = "Success! Downloading...";
-            
             const data = ffmpeg.FS('readFile', 'output.amv');
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/x-amv' }));
             const a = document.createElement('a');
@@ -77,10 +83,9 @@
             a.download = '1.amv';
             a.click();
             
-            statusEl.innerText = "Done!";
+            logEl.textContent += "!! Success: 1.amv downloaded !!\n";
         } catch (e) {
-            statusEl.innerText = "Error - Check logs";
-            console.error(e);
+            logEl.textContent += "ERROR: " + e.message + "\n";
         } finally {
             btn.disabled = false;
         }
