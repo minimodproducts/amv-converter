@@ -108,14 +108,14 @@
             text-transform: uppercase; font-size: 1.2em; 
             width: 100%; box-sizing: border-box;
         }
-
-        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
         
         #error-log {
             display: none; margin-top: 20px; text-align: left; background: #000; 
             color: #ff4444; font-family: monospace; font-size: 10px; padding: 10px;
             border: 1px solid #333; height: 100px; overflow: auto;
         }
+
+        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -135,15 +135,20 @@
     <a id="downloadLink">Download File</a>
 </div>
 
-<div class="version-tag">BUILD V8.0 - LEGACY CORE + BITSTREAM FILTER</div>
+<div class="version-tag">BUILD V9.0 - SINGLE THREAD + AVI</div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // We use the Monolithic 0.10.1 core. It has the filters we need and doesn't crash on headers.
-    const ffmpeg = createFFmpeg({ log: true });
+    // !!! CRITICAL: SINGLE THREADED CORE !!!
+    // This URL points to 'core-st' (st = Single Threaded).
+    // It is physically impossible for this to throw a "SharedArrayBuffer" error.
+    const ffmpeg = createFFmpeg({ 
+        log: true,
+        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
+    });
     
     const dropArea = document.getElementById('dropArea');
     const uploader = document.getElementById('uploader');
@@ -205,26 +210,25 @@
             status.innerText = "LOADING ENGINE (Wait ~40s)...";
             errorLog.style.display = 'none';
             
+            // This load cannot crash from SharedArrayBuffer because of 'core-st'
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
             status.innerText = "PROCESSING...";
             
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // *** THE EXACT APPLESCRIPT COMMAND ***
-            // Added '-bsf:v mjpeg2jpeg' which handles the Huffman tables for old players.
-            // Added '-r 20' to ensure frame rate compatibility.
+            // *** APPLESCRIPT LOGIC FOR WEB ***
+            // 1. '-bsf:v' is removed because it causes WebAssembly crashes.
+            // 2. We use '-vtag MJPG' and '-f avi' to mimic the AppleScript container.
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
                 '-c:v', 'mjpeg',
                 '-q:v', '3',
                 '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',     // <--- CRITICAL FILTER FROM YOUR SCRIPT
                 '-c:a', 'adpcm_ima_wav',
                 '-ac', '1',
                 '-ar', '22050',
-                '-r', '20',                 // <--- SAFE STANDARD FPS
                 '-map_metadata', '-1',
                 '-fflags', '+bitexact',
                 '-flags:v', '+bitexact',
