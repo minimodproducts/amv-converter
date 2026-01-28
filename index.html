@@ -4,229 +4,75 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
-    
-    <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
-
+    <script src="coi-serviceworker.js"></script>
     <style>
-        :root {
-            --bg-color: #000000;
-            --card-bg: #111111;
-            --inner-bg: #1a1a1a;
-            --text-color: #ffffff;
-            --sub-text: #888888;
-            --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%);
-            --border-radius: 12px;
-        }
-        
-        html, body { 
-            background-color: var(--bg-color) !important; 
-            margin: 0; padding: 0; width: 100%; height: 100%;
-            overflow-x: hidden;
-        }
-
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            color: var(--text-color);
-            display: flex; justify-content: center; align-items: center; flex-direction: column;
-        }
-
-        .card { 
-            width: 90%;
-            max-width: 500px;
-            padding: 40px 30px; 
-            background: var(--card-bg);
-            border-radius: 24px; 
-            text-align: center;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
-            border: 1px solid #222;
-            position: relative;
-            z-index: 10;
-        }
-
-        .logo-img { 
-            width: 90%; max-width: 450px; height: auto; 
-            margin-bottom: 5px; display: inline-block; 
-            pointer-events: none;
-        }
-
-        .tool-title { 
-            color: var(--sub-text); font-size: 0.9em; margin-bottom: 30px; 
-            letter-spacing: 3px; text-transform: uppercase; font-weight: 300;
-        }
-
-        .drop-zone {
-            background: var(--inner-bg);
-            border: 2px dashed #333;
-            border-radius: 16px;
-            height: 150px;
-            margin-bottom: 25px;
-            position: relative;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
+        :root { --bg-color: #000000; --card-bg: #111111; --text-color: #ffffff; --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%); }
+        html, body { background-color: var(--bg-color); margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; color: var(--text-color); display: flex; justify-content: center; align-items: center; }
+        .card { width: 90%; max-width: 500px; padding: 40px 30px; background: var(--card-bg); border-radius: 24px; text-align: center; border: 1px solid #222; }
+        .logo-img { width: 90%; max-width: 450px; height: auto; margin-bottom: 5px; pointer-events: none; }
+        .drop-zone { background: #1a1a1a; border: 2px dashed #333; border-radius: 16px; height: 150px; margin-bottom: 25px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
         .drop-zone:hover { border-color: #444; background: #1e1e1e; }
-        .drop-zone.drag-over { border-color: #53c0c5; background: #222; transform: scale(1.02); }
-
-        .drop-label { 
-            font-size: 0.85em; color: #53c0c5; font-weight: 700; 
-            letter-spacing: 1px; pointer-events: none; z-index: 5;
-            padding: 20px;
-        }
-
-        #uploader {
-            position: absolute;
-            width: 100%; height: 100%;
-            top: 0; left: 0;
-            opacity: 0;
-            cursor: pointer;
-            z-index: 10;
-            display: block;
-        }
-
-        #convertBtn { 
-            width: 100%; padding: 22px; 
-            background: var(--gradient); color: #000; 
-            border: none; border-radius: var(--border-radius); 
-            cursor: pointer; font-weight: 900; font-size: 1.4em; 
-            text-transform: uppercase; letter-spacing: 1px; 
-            transition: all 0.3s ease;
-        }
-
-        #convertBtn:hover { opacity: 0.9; transform: translateY(-2px); }
-        #convertBtn:disabled { background: #333; color: #666; cursor: not-allowed; transform: none; }
-
-        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; letter-spacing: 2px; text-transform: uppercase; }
-        
-        #downloadLink { 
-            display: none; margin-top: 15px; padding: 22px; 
-            background: #fff; color: #000; text-decoration: none; 
-            border-radius: var(--border-radius); font-weight: 900; 
-            text-transform: uppercase; font-size: 1.2em; 
-            width: 100%; box-sizing: border-box;
-        }
-        
-        #error-log {
-            display: none; margin-top: 20px; text-align: left; background: #000; 
-            color: #ff4444; font-family: monospace; font-size: 10px; padding: 10px;
-            border: 1px solid #333; height: 100px; overflow: auto;
-        }
-
-        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
+        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        #convertBtn { width: 100%; padding: 22px; background: var(--gradient); color: #000; border: none; border-radius: 12px; cursor: pointer; font-weight: 900; font-size: 1.4em; }
+        #convertBtn:disabled { background: #333; color: #666; }
+        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; }
+        #downloadLink { display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; text-decoration: none; border-radius: 12px; font-weight: 900; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
-    <div class="tool-title">VIDEO CONVERSION TOOL</div>
-    
     <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" class="drop-label">DRAG VIDEO HERE OR CLICK TO BROWSE</div>
+        <div id="fileInfo" style="color:#53c0c5; font-weight:700;">DRAG VIDEO HERE</div>
         <input type="file" id="uploader" accept="video/*">
     </div>
-
     <button id="convertBtn">CONVERT VIDEO</button>
     <div id="status">System Ready</div>
-    <div id="error-log"></div>
     <a id="downloadLink">Download File</a>
 </div>
-
-<div class="version-tag">BUILD V9.0 - SINGLE THREAD + AVI</div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: true });
     
-    // !!! CRITICAL: SINGLE THREADED CORE !!!
-    // This URL points to 'core-st' (st = Single Threaded).
-    // It is physically impossible for this to throw a "SharedArrayBuffer" error.
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
-    
-    const dropArea = document.getElementById('dropArea');
     const uploader = document.getElementById('uploader');
-    const fileInfo = document.getElementById('fileInfo');
     const status = document.getElementById('status');
     const convertBtn = document.getElementById('convertBtn');
     const downloadLink = document.getElementById('downloadLink');
-    const errorLog = document.getElementById('error-log');
-
     let currentFile = null;
 
-    /* --- UI LOGIC --- */
-    
     uploader.addEventListener('change', () => {
-        if (uploader.files.length > 0) handleFile(uploader.files[0]);
-    });
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, (e) => {
-            e.preventDefault(); e.stopPropagation();
-            dropArea.classList.add('drag-over');
-        }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, (e) => {
-            e.preventDefault(); e.stopPropagation();
-            dropArea.classList.remove('drag-over');
-        }, false);
-    });
-
-    dropArea.addEventListener('drop', (e) => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files.length > 0) {
-            uploader.files = files; 
-            handleFile(files[0]);
+        if (uploader.files.length > 0) {
+            currentFile = uploader.files[0];
+            document.getElementById('fileInfo').innerText = currentFile.name;
         }
     });
 
-    function handleFile(file) {
-        currentFile = file;
-        fileInfo.innerText = file.name.toUpperCase();
-        fileInfo.style.color = "#eaba1f";
-        status.innerText = "FILE LOADED - READY TO CONVERT";
-        errorLog.style.display = 'none';
-    }
-
-    /* --- CONVERSION LOGIC --- */
-    
     convertBtn.addEventListener('click', async () => {
-        if (!currentFile) return alert('Please select a video file first.');
+        if (!currentFile) return alert('Select a file.');
         
-        const originalName = currentFile.name.replace(/\.[^/.]+$/, "");
-        const finalFileName = `CLEAN_${originalName}.AVI`; 
-
         try {
             convertBtn.disabled = true;
-            status.innerText = "LOADING ENGINE (Wait ~40s)...";
-            errorLog.style.display = 'none';
+            status.innerText = "LOADING ENGINE...";
             
-            // This load cannot crash from SharedArrayBuffer because of 'core-st'
             if (!ffmpeg.isLoaded()) await ffmpeg.load();
             
-            status.innerText = "PROCESSING...";
-            
+            status.innerText = "CONVERTING...";
             ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
 
-            // *** APPLESCRIPT LOGIC FOR WEB ***
-            // 1. '-bsf:v' is removed because it causes WebAssembly crashes.
-            // 2. We use '-vtag MJPG' and '-f avi' to mimic the AppleScript container.
+            // *** THE CORRECTED COMMAND ***
+            // 1. Used 'adpcm_ima_wav' (Matches AppleScript)
+            // 2. Used 'avi' format (Matches AppleScript)
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
                 '-c:v', 'mjpeg',
                 '-q:v', '3',
                 '-vtag', 'MJPG',
-                '-c:a', 'adpcm_ima_wav',
+                '-c:a', 'adpcm_ima_wav',  // <--- THIS WAS THE MISSING KEY
                 '-ac', '1',
                 '-ar', '22050',
                 '-map_metadata', '-1',
@@ -242,19 +88,15 @@
             const url = URL.createObjectURL(blob);
             
             downloadLink.href = url;
-            downloadLink.download = finalFileName;
-            downloadLink.innerText = `DOWNLOAD ${finalFileName}`;
-            
-            status.innerText = "CONVERSION COMPLETE";
+            downloadLink.download = `CLEAN_${currentFile.name.split('.')[0]}.AVI`;
+            downloadLink.innerText = "DOWNLOAD VIDEO";
             downloadLink.style.display = 'block';
+            status.innerText = "DONE!";
             convertBtn.style.display = 'none';
-            dropArea.style.display = 'none';
 
         } catch (e) {
             console.error(e);
-            status.innerText = "CONVERSION FAILED";
-            errorLog.style.display = 'block';
-            errorLog.innerText = "Error details:\n" + e.message;
+            status.innerText = "ERROR (Check Console)";
             convertBtn.disabled = false;
         }
     });
