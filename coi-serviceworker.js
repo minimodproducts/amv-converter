@@ -4,21 +4,13 @@ if (typeof window === "undefined") {
     self.addEventListener("fetch", (event) => {
         if (event.request.cache === "only-if-cached" && event.request.mode !== "same-origin") return;
         event.respondWith(
-            fetch(event.request).then((response) => {
-                if (response.status === 0) return response;
-                const newHeaders = new Headers(response.headers);
-                newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
-                newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
-                return new Response(response.body, { status: response.status, statusText: response.statusText, headers: newHeaders });
+            fetch(event.request).then((re) => {
+                if (re.status === 0) return re;
+                const h = new Headers(re.headers);
+                h.set("Cross-Origin-Embedder-Policy", "require-corp");
+                h.set("Cross-Origin-Opener-Policy", "same-origin");
+                return new Response(re.body, { status: re.status, statusText: re.statusText, headers: h });
             })
         );
     });
-} else {
-    const script = document.currentScript;
-    if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register(script.src).then((reg) => {
-            reg.addEventListener("updatefound", () => { if (navigator.serviceWorker.controller) window.location.reload(); });
-            if (navigator.serviceWorker.controller && !window.crossOriginIsolated) window.location.reload();
-        });
-    }
 }
