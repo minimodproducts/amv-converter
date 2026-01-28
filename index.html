@@ -3,107 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AMV Converter (Fixed)</title>
+    <title>AMV Converter (Debug)</title>
     <script src="coi-serviceworker.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .container { text-align: center; width: 90%; max-width: 600px; }
-        .drop-zone { border: 2px dashed #444; background: #2a2a2a; padding: 50px; border-radius: 10px; transition: 0.2s; cursor: pointer; }
-        .drop-zone:hover { border-color: #fca311; background: #333; }
-        .drop-zone.dragover { border-color: #fca311; background: #444; }
-        h1 { margin-bottom: 10px; color: #fca311; }
-        p { color: #aaa; margin-bottom: 20px; }
-        #log { margin-top: 20px; font-family: monospace; font-size: 12px; color: #888; text-align: left; background: #111; padding: 10px; border-radius: 5px; height: 150px; overflow-y: auto; display: none; }
-        button { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 20px; display: none; }
-        button:hover { background: #e5940e; }
-        .loader { display: none; margin-top: 20px; color: #fca311; }
-        .error { color: #ff4444; margin-top: 15px; font-weight: bold; }
-        .footer { margin-top: 50px; font-size: 12px; color: #555; }
+        body { font-family: monospace; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { width: 90%; max-width: 800px; }
+        .drop-zone { border: 2px dashed #fca311; background: #2a2a2a; padding: 40px; text-align: center; cursor: pointer; margin-bottom: 20px; }
+        .drop-zone:hover { background: #333; }
+        h1 { color: #fca311; }
+        #log { 
+            background: #000; border: 1px solid #444; color: #0f0; 
+            padding: 10px; height: 300px; overflow-y: scroll; 
+            white-space: pre-wrap; font-size: 11px; text-align: left; 
+            display: block; /* Force display */
+        }
+        .error-text { color: #ff5555; font-weight: bold; }
+        .btn { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; display: none; margin-top: 10px;}
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>AMV Converter</h1>
-    <p>Drag & Drop your video here.</p>
+    <h1>AMV Debug Tool</h1>
+    <p>1. Drag video here. 2. Read the log below.</p>
 
     <div class="drop-zone" id="drop_zone">
-        <span id="status_text">Initializing...</span>
+        <span id="status_text">Loading Engine...</span>
     </div>
-    <div id="error_msg" class="error"></div>
 
-    <div class="loader" id="loader">Processing... (Do not close tab)</div>
-    <div id="log"></div>
-    <button id="download_btn">Download AMV</button>
-    
-    <div class="footer">Tool Version: v1.0.4 (BlockSize Fixed)</div>
+    <div id="log">Logs will appear here...</div>
+    <button id="download_btn" class="btn">Download Result</button>
 </div>
 
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.10.1/dist/ffmpeg.min.js"></script>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
-    
-    // Core engine config
+    const logBox = document.getElementById('log');
+    const statusText = document.getElementById('status_text');
+    const downloadBtn = document.getElementById('download_btn');
+
+    // 1. Setup Logger to print to screen (Fixed)
     const ffmpeg = createFFmpeg({ 
         log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js' 
+        corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js',
+        logger: ({ message }) => {
+            console.log(message); // Also log to browser console
+            logBox.innerHTML += `<div>${message}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
     });
-
-    const dropZone = document.getElementById('drop_zone');
-    const statusText = document.getElementById('status_text');
-    const errorMsg = document.getElementById('error_msg');
-    const logBox = document.getElementById('log');
-    const downloadBtn = document.getElementById('download_btn');
-    const loader = document.getElementById('loader');
 
     async function loadFFmpeg() {
         if (!window.crossOriginIsolated) {
-            statusText.innerText = "Security Check Failed";
-            errorMsg.innerHTML = "Error: 'coi-serviceworker.js' is missing.<br>Please ensure it is in your GitHub folder and refresh twice.";
+            logBox.innerHTML += `<div class="error-text">CRITICAL ERROR: Security Headers Missing.</div>`;
+            logBox.innerHTML += `<div>Ensure 'coi-serviceworker.js' is in the folder and you reloaded the page twice.</div>`;
             return;
         }
-
         try {
-            statusText.innerText = "Loading Engine...";
             await ffmpeg.load();
-            statusText.innerText = "Ready. Drop video file here.";
-            errorMsg.innerText = "";
+            statusText.innerText = "Ready. Drop Video.";
+            logBox.innerHTML += `<div style="color:#fca311">--- Engine Loaded Successfully ---</div>`;
         } catch (e) {
-            statusText.innerText = "Engine Failed";
-            errorMsg.innerText = e.message;
-            console.error(e);
+            logBox.innerHTML += `<div class="error-text">Engine Load Failed: ${e.message}</div>`;
         }
     }
 
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', async (e) => {
+    const dropZone = document.getElementById('drop_zone');
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); });
+    dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropZone.classList.remove('dragover');
         const files = e.dataTransfer.files;
         if (files.length > 0) processFile(files[0]);
     });
 
-    dropZone.addEventListener('click', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.onchange = (e) => { if(e.target.files.length > 0) processFile(e.target.files[0]); };
-        input.click();
-    });
-
     async function processFile(file) {
-        if (!ffmpeg.isLoaded()) await loadFFmpeg();
-        
+        if (!ffmpeg.isLoaded()) return;
         downloadBtn.style.display = 'none';
-        loader.style.display = 'block';
-        logBox.style.display = 'block';
-        statusText.innerText = `Converting: ${file.name}`;
+        logBox.innerHTML = `<div style="color:#fca311">--- Starting Conversion for ${file.name} ---</div>`;
         
         try {
             ffmpeg.FS('writeFile', 'input', await fetchFile(file));
 
-            // REMOVED '-block_size 1050' to fix the crash
+            // Run conversion (With -block_size removed)
             await ffmpeg.run(
                 '-i', 'input',
                 '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
@@ -115,7 +97,9 @@
                 'output.amv'
             );
 
+            // Check if output exists
             const data = ffmpeg.FS('readFile', 'output.amv');
+            logBox.innerHTML += `<div style="color:#fca311">--- SUCCESS! File created. ---</div>`;
             
             const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/amv' }));
             downloadBtn.onclick = () => {
@@ -124,16 +108,13 @@
                 a.download = `${file.name.split('.')[0]}_converted.amv`;
                 a.click();
             };
-            
             downloadBtn.style.display = 'inline-block';
-            statusText.innerText = "Conversion Complete!";
-            logBox.innerHTML += "> DONE. Click Download button.\n";
+
         } catch (error) {
-            statusText.innerText = "Conversion Error";
-            errorMsg.innerText = "Check log below for details.";
+            logBox.innerHTML += `<div class="error-text">--- ERROR DETAILS ---</div>`;
+            // Print the specific error message to the screen
+            logBox.innerHTML += `<div class="error-text">${error.message || error}</div>`;
             console.error(error);
-        } finally {
-            loader.style.display = 'none';
         }
     }
 
