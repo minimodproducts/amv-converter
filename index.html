@@ -3,120 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MINI-MOD | VIDEO CONVERSION TOOL</title>
-    
-    <link rel="icon" type="image/x-icon" href="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/918bb0d1-9adc-45c7-b195-9bc74354c176/favicon.ico?format=100w">
-
+    <title>AMV Video Converter</title>
     <script src="coi-serviceworker.js"></script>
-
     <style>
-        :root { --bg-color: #000000; --card-bg: #111111; --text-color: #ffffff; --gradient: linear-gradient(90deg, #eaba1f 0%, #53c0c5 100%); }
-        html, body { background-color: var(--bg-color); margin: 0; padding: 0; width: 100%; height: 100%; font-family: sans-serif; color: var(--text-color); display: flex; justify-content: center; align-items: center; }
-        .card { width: 90%; max-width: 500px; padding: 40px 30px; background: var(--card-bg); border-radius: 24px; text-align: center; border: 1px solid #222; }
-        .logo-img { width: 90%; max-width: 450px; height: auto; margin-bottom: 5px; pointer-events: none; }
-        .drop-zone { background: #1a1a1a; border: 2px dashed #333; border-radius: 16px; height: 150px; margin-bottom: 25px; position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-        .drop-zone:hover { border-color: #444; background: #1e1e1e; }
-        #uploader { position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-        #convertBtn { width: 100%; padding: 22px; background: var(--gradient); color: #000; border: none; border-radius: 12px; cursor: pointer; font-weight: 900; font-size: 1.4em; }
-        #convertBtn:disabled { background: #333; color: #666; }
-        #status { margin-top: 25px; font-size: 0.8em; font-weight: 700; color: #53c0c5; }
-        #downloadLink { display: none; margin-top: 15px; padding: 22px; background: #fff; color: #000; text-decoration: none; border-radius: 12px; font-weight: 900; }
-        #error-log { display: none; margin-top: 20px; text-align: left; background: #000; color: #ff4444; font-family: monospace; font-size: 10px; padding: 10px; border: 1px solid #333; height: 100px; overflow: auto; }
-        .version-tag { margin-top: 20px; color: #333; font-size: 0.7em; letter-spacing: 1px; font-weight: 600; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #1a1a1a; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { text-align: center; width: 90%; max-width: 600px; }
+        .drop-zone { border: 2px dashed #444; background: #2a2a2a; padding: 50px; border-radius: 10px; transition: 0.2s; cursor: pointer; }
+        .drop-zone:hover { border-color: #fca311; background: #333; }
+        .drop-zone.dragover { border-color: #fca311; background: #444; }
+        h1 { margin-bottom: 10px; color: #fca311; }
+        p { color: #aaa; margin-bottom: 20px; }
+        #log { margin-top: 20px; font-family: monospace; font-size: 12px; color: #888; text-align: left; background: #111; padding: 10px; border-radius: 5px; height: 150px; overflow-y: auto; display: none; }
+        button { background: #fca311; color: #000; border: none; padding: 10px 20px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 20px; display: none; }
+        button:hover { background: #e5940e; }
+        .loader { display: none; margin-top: 20px; color: #fca311; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <img src="https://images.squarespace-cdn.com/content/v1/6976aff0cf735c704e5548b5/6ef4889e-f464-48c2-ba0e-71004431619c/minimod_logo.png" alt="MINI-MOD" class="logo-img">
-    <div class="drop-zone" id="dropArea">
-        <div id="fileInfo" style="color:#53c0c5; font-weight:700;">DRAG VIDEO HERE</div>
-        <input type="file" id="uploader" accept="video/*">
+<div class="container">
+    <h1>AMV Converter</h1>
+    <p>Drag & Drop your video here to convert it for the custom player.</p>
+
+    <div class="drop-zone" id="drop_zone">
+        <span id="status_text">Drop video file here</span>
     </div>
-    <button id="convertBtn">CONVERT VIDEO</button>
-    <div id="status">System Ready</div>
-    <div id="error-log"></div>
-    <a id="downloadLink">Download File</a>
+
+    <div class="loader" id="loader">Processing... (This may take a moment)</div>
+    <div id="log"></div>
+    <button id="download_btn">Download Converted Video</button>
 </div>
 
-<div class="version-tag">BUILD V13.0 - RAW AUDIO (PCM)</div>
-
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
 
 <script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    
-    // Single Threaded Core (No Crashes)
-    const ffmpeg = createFFmpeg({ 
-        log: true,
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
-    
-    const uploader = document.getElementById('uploader');
-    const status = document.getElementById('status');
-    const convertBtn = document.getElementById('convertBtn');
-    const downloadLink = document.getElementById('downloadLink');
-    const errorLog = document.getElementById('error-log');
-    let currentFile = null;
+    const { FFmpeg } = FFmpegWASM;
+    const { fetchFile } = FFmpegUtil;
+    let ffmpeg = null;
 
-    uploader.addEventListener('change', () => {
-        if (uploader.files.length > 0) {
-            currentFile = uploader.files[0];
-            document.getElementById('fileInfo').innerText = currentFile.name.toUpperCase();
-        }
+    const dropZone = document.getElementById('drop_zone');
+    const statusText = document.getElementById('status_text');
+    const logBox = document.getElementById('log');
+    const downloadBtn = document.getElementById('download_btn');
+    const loader = document.getElementById('loader');
+
+    // Initialize FFmpeg
+    async function loadFFmpeg() {
+        if (ffmpeg) return;
+        statusText.innerText = "Loading conversion engine...";
+        ffmpeg = new FFmpeg();
+        
+        ffmpeg.on('log', ({ message }) => {
+            logBox.style.display = 'block';
+            logBox.innerHTML += `> ${message}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+            console.log(message);
+        });
+
+        // Load core from CDN
+        await ffmpeg.load({
+            coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.4/dist/umd/ffmpeg-core.wasm'
+        });
+        
+        statusText.innerText = "Ready. Drop video file here.";
+    }
+
+    // Handle Drag & Drop
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) processFile(files[0]);
     });
 
-    convertBtn.addEventListener('click', async () => {
-        if (!currentFile) return alert('Select a file.');
+    dropZone.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = (e) => { if(e.target.files.length > 0) processFile(e.target.files[0]); };
+        input.click();
+    });
+
+    async function processFile(file) {
+        if (!ffmpeg) await loadFFmpeg();
+        
+        downloadBtn.style.display = 'none';
+        loader.style.display = 'block';
+        statusText.innerText = `Converting: ${file.name}`;
         
         try {
-            convertBtn.disabled = true;
-            status.innerText = "LOADING ENGINE...";
-            errorLog.style.display = 'none';
-            
-            if (!ffmpeg.isLoaded()) await ffmpeg.load();
-            
-            status.innerText = "PROCESSING (RAW AUDIO)...";
-            ffmpeg.FS('writeFile', 'input', await fetchFile(currentFile));
+            // Write file to memory
+            await ffmpeg.writeFile('input', await fetchFile(file));
 
-            await ffmpeg.run(
+            // EXACT arguments from your CONVERT.bat
+            // -vf "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip"
+            // -c:v amv -c:a adpcm_ima_amv -r 21 -ac 1 -ar 22050 -block_size 1050
+            
+            const args = [
                 '-i', 'input',
-                '-vf', 'scale=320:240:force_original_aspect_ratio=decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2',
-                '-r', '21.68',               // Matches your sample
-                '-c:v', 'mjpeg',
-                '-q:v', '3',
-                '-vtag', 'MJPG',
-                '-bsf:v', 'mjpeg2jpeg',      // Required for Video
-                '-c:a', 'pcm_s16le',         // <--- CHANGED: Uncompressed Audio (Safest)
+                '-vf', "scale='if(gt(a,4/3),-1,320)':'if(gt(a,4/3),240,-1)',crop=320:240,hflip",
+                '-c:v', 'amv',
+                '-c:a', 'adpcm_ima_amv',
+                '-r', '21',
                 '-ac', '1',
                 '-ar', '22050',
-                '-map_metadata', '-1',
-                '-fflags', '+bitexact',
-                '-flags:v', '+bitexact',
-                '-f', 'avi',
-                '-y',
-                'output.avi'
-            );
+                '-block_size', '1050',
+                'output.amv'
+            ];
 
-            const data = ffmpeg.FS('readFile', 'output.avi');
-            const blob = new Blob([data.buffer], { type: 'video/x-msvideo' });
-            const url = URL.createObjectURL(blob);
+            await ffmpeg.exec(args);
+
+            // Read output
+            const data = await ffmpeg.readFile('output.amv');
             
-            downloadLink.href = url;
-            downloadLink.download = `CLEAN_${currentFile.name.split('.')[0]}.AVI`;
-            downloadLink.innerText = "DOWNLOAD VIDEO";
-            downloadLink.style.display = 'block';
-            status.innerText = "DONE!";
-            convertBtn.style.display = 'none';
-
-        } catch (e) {
-            console.error(e);
-            status.innerText = "FAILED - CHECK LOGS";
-            errorLog.style.display = 'block';
-            errorLog.innerText = e.message;
-            convertBtn.disabled = false;
+            // Create download link
+            const url = URL.createObjectURL(new Blob([data.buffer], { type: 'video/amv' }));
+            downloadBtn.onclick = () => {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${file.name.split('.')[0]}_converted.amv`;
+                a.click();
+            };
+            
+            downloadBtn.style.display = 'inline-block';
+            statusText.innerText = "Conversion Complete!";
+        } catch (error) {
+            statusText.innerText = "Error during conversion. Check logs.";
+            console.error(error);
+        } finally {
+            loader.style.display = 'none';
         }
-    });
+    }
+
+    // Start loading immediately
+    loadFFmpeg();
 </script>
 </body>
 </html>
